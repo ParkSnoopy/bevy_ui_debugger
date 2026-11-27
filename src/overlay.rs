@@ -133,6 +133,10 @@ struct OverlayState {
     deferred_keys: Vec<(Entity, KeyboardInput)>,
 }
 
+/// True for frames in which the debugger owns the game's keyboard and mouse input.
+#[derive(Resource, Default)]
+pub struct UiDebuggerInput(pub bool);
+
 /// Adds the annotation overlay to the app.
 ///
 /// Attach it only when the host's own switch says so, for example
@@ -178,6 +182,7 @@ impl Plugin for UiDebuggerPlugin {
                 verbose: self.verbose,
             })
             .insert_resource(NoteSink::open(self.log_dir.clone()))
+            .init_resource::<UiDebuggerInput>()
             .add_systems(Startup, spawn_overlay)
             .add_systems(Last, print_notes_on_exit)
             .add_systems(PreUpdate, (read_hotkey, capture_click).chain())
@@ -232,7 +237,7 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
                 height: Val::Percent(100.0),
                 ..default()
             },
-            GlobalZIndex(i32::MAX),
+            GlobalZIndex(i32::MAX - 2),
             Pickable::IGNORE,
             OverlayNode,
             OverlayRoot,
@@ -330,6 +335,7 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
                         is_hoverable: true,
                     },
                     PencilButton,
+                    GlobalZIndex(i32::MAX),
                     OverlayNode,
                 ))
                 .with_child((
@@ -450,10 +456,16 @@ fn suppress_game_input(
     mut keys_code: ResMut<ButtonInput<KeyCode>>,
     mut keys: ResMut<ButtonInput<Key>>,
     mut mouse: ResMut<ButtonInput<MouseButton>>,
+    focus: Res<InputFocus>,
+    mut capture: ResMut<UiDebuggerInput>,
     mut state: ResMut<OverlayState>,
 ) {
     let swallow = std::mem::take(&mut state.pending.swallow);
-    if !state.inspecting && !swallow {
+    let editor_focused = state
+        .editor_input
+        .is_some_and(|editor| focus.get() == Some(editor));
+    capture.0 = state.inspecting || editor_focused || swallow;
+    if !capture.0 {
         return;
     }
     let held_codes: Vec<KeyCode> = keys_code
@@ -466,15 +478,47 @@ fn suppress_game_input(
         .filter(|key| is_modifier_key(key))
         .cloned()
         .collect();
-    keys_code.clear();
+    keys_code.reset_all();
     for code in held_codes {
         keys_code.press(code);
     }
-    keys.clear();
+    keys.reset_all();
     for key in held_keys {
         keys.press(key);
     }
-    mouse.clear();
+    mouse.reset_all();
+}
+
+#[cfg(test)]
+#[test]
+fn focused_note_editor_blocks_held_game_keys_until_focus_leaves() {
+    let mut app = App::new();
+    let editor = app.world_mut().spawn_empty().id();
+    let mut focus = InputFocus::default();
+    focus.set(editor, FocusCause::Auto);
+    let mut keys = ButtonInput::default();
+    keys.press(KeyCode::KeyW);
+    keys.press(KeyCode::ShiftLeft);
+    app.insert_resource(focus)
+        .insert_resource(keys)
+        .init_resource::<ButtonInput<Key>>()
+        .init_resource::<ButtonInput<MouseButton>>()
+        .init_resource::<UiDebuggerInput>()
+        .insert_resource(OverlayState {
+            editor_input: Some(editor),
+            ..Default::default()
+        })
+        .add_systems(PreUpdate, suppress_game_input);
+
+    app.update();
+    let keys = app.world().resource::<ButtonInput<KeyCode>>();
+    assert!(!keys.pressed(KeyCode::KeyW));
+    assert!(keys.pressed(KeyCode::ShiftLeft));
+    assert!(app.world().resource::<UiDebuggerInput>().0);
+
+    app.world_mut().resource_mut::<InputFocus>().clear();
+    app.update();
+    assert!(!app.world().resource::<UiDebuggerInput>().0);
 }
 
 fn is_modifier_code(code: KeyCode) -> bool {
@@ -757,7 +801,7 @@ fn sync_editor(
                 BackgroundColor(PANEL_BG),
                 BorderColor::all(ACCENT),
                 // A separate root, so it needs its own z to stay above the game's layers.
-                GlobalZIndex(i32::MAX),
+                GlobalZIndex(i32::MAX - 1),
                 Pickable {
                     should_block_lower: true,
                     is_hoverable: true,

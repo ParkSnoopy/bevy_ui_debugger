@@ -25,4 +25,4 @@ mod overlay;
 
 pub use inspect::{IgnoreUiDebugPick, UiTarget};
 pub use log::{LOG_PREFIX, Note, NoteHistory};
-pub use overlay::UiDebuggerPlugin;
+pub use overlay::{UiDebuggerInput, UiDebuggerPlugin};

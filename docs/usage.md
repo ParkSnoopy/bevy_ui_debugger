@@ -59,6 +59,14 @@ Check each screen of the host, since a corner that is free on one screen may hol
 Add `bevy_ui_debugger::IgnoreUiDebugPick` to decorative nodes, such as a full-screen vignette, to let the debugger select the nodes behind them.
 This marker does not affect rendering or Bevy gameplay picking, and does not exclude descendants.
 
+### Deferring host input
+
+The debugger resets gameplay button state during `InputSystems` while the
+inspector or note editor owns input. Schedule gameplay button readers after
+`InputSystems`. Hosts that buffer actions or consume raw events can also read
+`Option<Res<UiDebuggerInput>>` after that set and discard gameplay input when its
+value is `true`. The focused note editor still receives raw keyboard events.
+
 ## Workflow
 
 1. Start the host with whatever switch it uses to add the plugin.
