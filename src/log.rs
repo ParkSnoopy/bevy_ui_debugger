@@ -36,52 +36,65 @@ pub struct Note {
 
 impl Note {
     /// JSON object describing the note, one line, UTF-8 strings escaped.
-    pub fn to_json(&self) -> String {
-        let markers = self
-            .target
-            .markers
-            .iter()
-            .map(|m| json_str(m))
-            .collect::<Vec<_>>()
-            .join(",");
-        let ancestry = self
-            .target
-            .ancestry
-            .iter()
-            .map(|a| json_str(a))
-            .collect::<Vec<_>>()
-            .join(",");
-        let mut out = String::new();
+    ///
+    /// The short form keeps what is needed to find the node: `entity`, `name`, `markers`,
+    /// `text`, `z`, `ancestry` and `note`. `verbose` adds `seq`, `t`, `rect`, `style`,
+    /// `cursor` and `window` around them.
+    pub fn to_json(&self, verbose: bool) -> String {
+        let strings = |items: &[String]| {
+            items
+                .iter()
+                .map(|item| json_str(item))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let target = &self.target;
+        let mut out = String::from("{");
+        if verbose {
+            let _ = write!(out, "\"seq\":{},\"t\":{:.3},", self.seq, self.time_secs);
+        }
         let _ = write!(
             out,
-            "{{\"seq\":{},\"t\":{:.3},\"entity\":\"{}\",\"name\":{},\"markers\":[{}],\"text\":{},\
-             \"rect\":[{:.1},{:.1},{:.1},{:.1}],\"z\":{},\"ancestry\":[{}],\"style\":{},\
-             \"cursor\":[{:.1},{:.1}],\"window\":[{:.1},{:.1}],\"note\":{}}}",
-            self.seq,
-            self.time_secs,
-            self.target.id,
-            self.target.name.as_deref().map_or("null".to_string(), json_str),
-            markers,
-            self.target.text.as_deref().map_or("null".to_string(), json_str),
-            self.target.rect.min.x,
-            self.target.rect.min.y,
-            self.target.rect.width(),
-            self.target.rect.height(),
-            self.target.z_index.map_or("null".to_string(), |z| z.to_string()),
-            ancestry,
-            json_str(&self.target.style),
-            self.cursor.x,
-            self.cursor.y,
-            self.window.x,
-            self.window.y,
-            json_str(&self.text),
+            "\"entity\":\"{}\",\"name\":{},\"markers\":[{}],\"text\":{},",
+            target.id,
+            target.name.as_deref().map_or("null".to_string(), json_str),
+            strings(&target.markers),
+            target.text.as_deref().map_or("null".to_string(), json_str),
         );
+        if verbose {
+            let _ = write!(
+                out,
+                "\"rect\":[{:.1},{:.1},{:.1},{:.1}],",
+                target.rect.min.x,
+                target.rect.min.y,
+                target.rect.width(),
+                target.rect.height(),
+            );
+        }
+        let _ = write!(
+            out,
+            "\"z\":{},\"ancestry\":[{}],",
+            target.z_index.map_or("null".to_string(), |z| z.to_string()),
+            strings(&target.ancestry),
+        );
+        if verbose {
+            let _ = write!(
+                out,
+                "\"style\":{},\"cursor\":[{:.1},{:.1}],\"window\":[{:.1},{:.1}],",
+                json_str(&target.style),
+                self.cursor.x,
+                self.cursor.y,
+                self.window.x,
+                self.window.y,
+            );
+        }
+        let _ = write!(out, "\"note\":{}}}", json_str(&self.text));
         out
     }
 
     /// The full log line.
-    pub fn to_line(&self) -> String {
-        format!("{LOG_PREFIX} {}", self.to_json())
+    pub fn to_line(&self, verbose: bool) -> String {
+        format!("{LOG_PREFIX} {}", self.to_json(verbose))
     }
 }
 
@@ -206,5 +219,45 @@ mod tests {
         sink.write("UI_DEBUG_NOTE {a}");
         sink.print_all();
         assert_eq!(sink.pending.len(), 0);
+    }
+
+    fn sample_note() -> Note {
+        Note {
+            seq: 1,
+            time_secs: 11.856,
+            target: UiTarget {
+                entity: bevy::ecs::entity::Entity::PLACEHOLDER,
+                id: "329v0".to_owned(),
+                name: Some("top_bar".to_owned()),
+                markers: Vec::new(),
+                text: Some("DEMO GAME / depth 3".to_owned()),
+                rect: bevy::math::Rect::new(0.0, 0.0, 1280.0, 56.0),
+                z_index: Some(0),
+                ancestry: vec!["Node#328".to_owned()],
+                style: "display=Flex".to_owned(),
+            },
+            cursor: Vec2::new(996.6, 36.1),
+            window: Vec2::new(1280.0, 720.0),
+            text: "test for heading".to_owned(),
+        }
+    }
+
+    #[test]
+    fn short_note_keeps_only_the_locating_fields() {
+        assert_eq!(
+            sample_note().to_line(false),
+            "UI_DEBUG_NOTE {\"entity\":\"329v0\",\"name\":\"top_bar\",\"markers\":[],\
+             \"text\":\"DEMO GAME / depth 3\",\"z\":0,\"ancestry\":[\"Node#328\"],\
+             \"note\":\"test for heading\"}"
+        );
+    }
+
+    #[test]
+    fn verbose_note_adds_geometry_and_session_fields() {
+        let line = sample_note().to_line(true);
+        assert!(line.contains("\"seq\":1,\"t\":11.856,"));
+        assert!(line.contains("\"rect\":[0.0,0.0,1280.0,56.0]"));
+        assert!(line.contains("\"style\":\"display=Flex\""));
+        assert!(line.contains("\"cursor\":[996.6,36.1],\"window\":[1280.0,720.0],"));
     }
 }

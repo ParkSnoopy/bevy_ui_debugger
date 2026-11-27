@@ -54,9 +54,10 @@ fn main() -> std::io::Result<()> {
             ..default()
         }),
     );
-    // A real game gates this on `bevy_ui_debugger::is_requested()`.
+    // A real game gates this on its own command-line flag or setting.
     app.add_plugins(UiDebuggerPlugin {
         log_dir: script.clone(),
+        verbose: args.iter().any(|arg| arg == "--verbose"),
         ..Default::default()
     });
     if let Some(dir) = script {

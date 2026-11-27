@@ -5,14 +5,12 @@
 | File | Role |
 | --- | --- |
 | `src/lib.rs` | Public re-exports and the crate-level overview. |
-| `src/cli.rs` | `FLAG`, `ENV` and `is_requested()`. |
 | `src/log.rs` | `Note`, `NoteHistory`, the in-memory buffer printed at exit, the JSONL sink, JSON string escaping. |
 | `src/inspect.rs` | Hit testing over `UiStack` and identity extraction (`UiTarget`). |
 | `src/overlay.rs` | The plugin: overlay entities, input isolation, editor, pins, tooltip. |
 | `examples/annotate.rs` | Stand-alone demo game with an optional scripted session. |
 
-Public API: `UiDebuggerPlugin`, `UiTarget`, `Note`, `NoteHistory`, `is_requested`, `FLAG`, `ENV`,  
-`LOG_PREFIX`.
+Public API: `UiDebuggerPlugin`, `UiTarget`, `Note`, `NoteHistory`, `LOG_PREFIX`.
 
 ## Overlay entities
 

@@ -1,7 +1,8 @@
 //! In-game UI annotation overlay for Bevy.
 //!
-//! Add [`UiDebuggerPlugin`] to the app, typically only when [`is_requested`] is true
-//! (`--ui-debug` on the command line or `BEVY_UI_DEBUG=1`).
+//! Add [`UiDebuggerPlugin`] to the app, typically only when the host's own switch asks for
+//! it. The crate reads neither command-line arguments nor environment variables; every
+//! option is a field of the plugin.
 //!
 //! Game input is muted while inspecting; game systems that read `ButtonInput` must run
 //! `.after(InputSystems)` for that to hold.
@@ -18,12 +19,10 @@
     reason = "Bevy system parameters such as `Res` and `ResMut` can only be taken by value"
 )]
 
-mod cli;
 mod inspect;
 mod log;
 mod overlay;
 
-pub use cli::{ENV, FLAG, is_requested};
 pub use inspect::UiTarget;
 pub use log::{LOG_PREFIX, Note, NoteHistory};
 pub use overlay::UiDebuggerPlugin;

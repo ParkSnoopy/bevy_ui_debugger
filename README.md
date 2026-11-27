@@ -33,14 +33,14 @@ use bevy_ui_debugger::UiDebuggerPlugin;
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
-    if bevy_ui_debugger::is_requested() {
-        app.add_plugins(UiDebuggerPlugin::default());
-    }
+    app.add_plugins(UiDebuggerPlugin::default());
     app.run();
 }
 ```
 
-Run the game with `--ui-debug` or `BEVY_UI_DEBUG=1`. `F10` shows or hides the whole overlay.
+The crate reads no command-line flags or environment variables. Gate the plugin on the  
+host's own switch and pass options as plugin fields. `F10` shows or hides the whole overlay.  
+Set `verbose: true` for the full note detail (geometry, style, cursor, window).
 
 Try it without writing any code:
 

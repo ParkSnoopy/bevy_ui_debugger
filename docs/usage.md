@@ -2,22 +2,25 @@
 
 ## Opting in
 
-The overlay should never ship enabled by default. `bevy_ui_debugger::is_requested()` returns  
-true when either of these is present:
-
-- the command-line flag `--ui-debug` (`bevy_ui_debugger::FLAG`)  
-- the environment variable `BEVY_UI_DEBUG` set to anything other than empty or `0`  
-  (`bevy_ui_debugger::ENV`)
+The overlay should never ship enabled by default. The crate reads no command-line arguments  
+and no environment variables, so the host decides when to add the plugin and passes every  
+option as a plugin field:
 
 ```rust
-if bevy_ui_debugger::is_requested() {
-    app.add_plugins(UiDebuggerPlugin::default());
+if args.ui_debug {
+    app.add_plugins(UiDebuggerPlugin {
+        verbose: args.verbose,
+        ..Default::default()
+    });
 }
 ```
 
-If the host parses its command line strictly (for example with `clap` derive), declare  
-`--ui-debug` in the host's own parser and use `is_requested()` only as a fallback for the  
-environment variable. The function scans `std::env::args_os` and does not consume anything.
+`args` is the host's own parsed command line, a config file, or whatever else the host uses.
+
+### Verbose notes
+
+Notes are short by default. Set `UiDebuggerPlugin::verbose` to `true` for the full detail.  
+The host chooses how to expose it, for example as a `-v`/`--verbose` flag.
 
 ## Plugin settings
 
@@ -27,6 +30,7 @@ environment variable. The function scans `std::env::args_os` and does not consum
 | --- | --- | --- |
 | `toggle_key` | `KeyCode::F10` | Shows or hides the whole overlay. |
 | `log_dir` | `None` | Directory that receives `ui-debug-notes.jsonl`. Created if missing. Notes are also printed to stderr when the game ends. |
+| `verbose` | `false` | Adds `seq`, `t`, `rect`, `style`, `cursor` and `window` to every note. |
 | `font` | `None` | Font for all overlay text. Without it Bevy's default font is used when one is compiled in. |
 | `button_position` | bottom-right, 12 px inset | `UiRect` of absolute offsets for the toggle button. |
 
@@ -53,7 +57,7 @@ bottom-right, and so on.
 
 ## Workflow
 
-1. Start the host with `--ui-debug`.  
+1. Start the host with whatever switch it uses to add the plugin.  
 2. Click the `UI` button. It turns solid while inspect mode is on.  
 3. Hover nodes; the tooltip shows `#id "name" Marker "text" WxH @ (x,y)`.  
 4. Click a node. The editor opens below it, or above when there is no room below.  
@@ -79,8 +83,8 @@ Notes are written in two places:
   ```
   Nothing is printed when no note was saved.
 - **`<log_dir>/ui-debug-notes.jsonl`**, the same lines, appended as each note is saved so they  
-  survive a crash. The file is opened in append mode, so several sessions accumulate. Use the  
-  `seq` and `t` fields to tell them apart.
+  survive a crash. The file is opened in append mode, so several sessions accumulate. Run with  
+  `verbose` to get the `seq` and `t` fields that tell them apart.
 
 Inside the process every note is also kept in the `NoteHistory` resource (`notes: Vec<Note>`),  
 newest last, for tests or custom export.

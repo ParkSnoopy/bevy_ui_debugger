@@ -73,6 +73,7 @@ struct Config {
     toggle_key: KeyCode,
     font: Option<Handle<Font>>,
     button_position: UiRect,
+    verbose: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -117,8 +118,8 @@ struct OverlayState {
 
 /// Adds the annotation overlay to the app.
 ///
-/// Attach it only when the opt-in says so, for example
-/// `if bevy_ui_debugger::is_requested() { app.add_plugins(UiDebuggerPlugin::default()); }`.
+/// Attach it only when the host's own switch says so, for example
+/// `if args.ui_debug { app.add_plugins(UiDebuggerPlugin { verbose: args.verbose, ..default() }); }`.
 pub struct UiDebuggerPlugin {
     /// Key that shows or hides the whole overlay.
     pub toggle_key: KeyCode,
@@ -129,6 +130,9 @@ pub struct UiDebuggerPlugin {
     pub font: Option<Handle<Font>>,
     /// Absolute offsets of the toggle button; move it where the game has no UI of its own.
     pub button_position: UiRect,
+    /// Write the full detail (`seq`, `t`, `rect`, `style`, `cursor`, `window`) into each note.
+    /// Off by default; the host decides how to expose it.
+    pub verbose: bool,
 }
 
 impl Default for UiDebuggerPlugin {
@@ -138,6 +142,7 @@ impl Default for UiDebuggerPlugin {
             log_dir: None,
             font: None,
             button_position: UiRect::new(Val::Auto, Val::Px(12.0), Val::Auto, Val::Px(12.0)),
+            verbose: false,
         }
     }
 }
@@ -153,6 +158,7 @@ impl Plugin for UiDebuggerPlugin {
                 toggle_key: self.toggle_key,
                 font: self.font.clone(),
                 button_position: self.button_position,
+                verbose: self.verbose,
             })
             .insert_resource(NoteSink::open(self.log_dir.clone()))
             .add_systems(Startup, spawn_overlay)
@@ -677,7 +683,8 @@ fn apply_editor_action(world: &mut World, action: EditorAction) {
             text,
         }
     };
-    world.resource_mut::<NoteSink>().write(&note.to_line());
+    let verbose = world.resource::<Config>().verbose;
+    world.resource_mut::<NoteSink>().write(&note.to_line(verbose));
     world.resource_mut::<OverlayState>().pending_pin = Some((note.target.entity, note.seq));
     world.resource_mut::<NoteHistory>().notes.push(note);
 }
