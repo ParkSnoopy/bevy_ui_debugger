@@ -3,7 +3,7 @@
 An opt-in overlay for [Bevy](https://bevy.org) that lets you point at a UI node in a running game,  
 type a note about it, and get back one log line that identifies the node exactly.
 
-It exists to close the gap between "this button looks wrong" and the entity, component and style that produce it.  
+It exists to close the gap between "this button looks wrong" and the entity, component and style that produce it.
 Review feedback written against the running UI can be pasted straight into a bug report, an issue or an agent prompt.
 
 ## What it does
