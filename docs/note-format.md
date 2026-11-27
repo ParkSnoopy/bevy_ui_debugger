@@ -14,12 +14,21 @@ With `UiDebuggerPlugin::verbose` the object also carries `seq`, `t`, `rect`, `st
 UI_DEBUG_NOTE {"seq":1,"t":12.480,"entity":"123v4294967296","name":"btn_load","markers":["my_game::ui::MenuButton"],"text":"Load","rect":[16.0,150.0,228.0,44.0],"z":null,"ancestry":["Node#7","side_panel"],"style":"display=Flex ...","cursor":[130.0,152.0],"window":[1280.0,720.0],"note":"too small, move it up"}
 ```
 
+Whole-game notes use `"scope":"game"` instead of node identity or style fields:
+
+```text
+UI_DEBUG_NOTE {"scope":"game","note":"the camera moves too fast"}
+```
+
+Verbose game notes also include `seq`, `t`, `cursor` (the click on `Game`), and `window`.
+
 ## Fields
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `seq` (verbose) | integer | 1-based sequence number within the session. |
 | `t` (verbose) | number | Seconds of virtual time since the game started, three decimals. |
+| `scope` (game notes) | string | `game` means no UI node was selected. |
 | `entity` | string | `<index>v<generation>` of the annotated entity. Unique for one run of the game, not across runs. |
 | `name` | string or null | The `Name` component, when present. |
 | `markers` | string array | Type paths of the node's components that are not part of the engine, for example `my_game::ui::MenuButton`. Empty when Bevy's `debug` feature is off. Anything whose path starts with `bevy::` or `bevy_` is skipped. |

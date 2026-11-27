@@ -30,7 +30,7 @@ The host chooses how to expose it, for example as a `-v`/`--verbose` flag.
 | --- | --- | --- |
 | `toggle_key` | `KeyCode::F10` | Shows or hides the whole overlay. |
 | `log_dir` | `None` | Directory that receives `ui-debug-notes.jsonl`. Created if missing. Notes are also printed to stderr when the game ends. |
-| `verbose` | `false` | Adds `seq`, `t`, `rect`, `style`, `cursor` and `window` to every note. |
+| `verbose` | `false` | Adds `seq`, `t`, `cursor` and `window` to every note, plus `rect` and `style` to UI notes. |
 | `font` | `None` | Font for all overlay text. Without it Bevy's default font is used when one is compiled in. |
 | `button_position` | bottom-right, 12 px inset | `UiRect` of absolute offsets for the toggle button. |
 
@@ -50,7 +50,7 @@ If the host UI shows such text, pass the host's font so the tooltip, the editor 
 
 ### Button placement
 
-Pick a spot the host UI does not use.  
+Pick a spot the host UI does not use. Leave room beside `UI` for the `Game` button shown in inspect mode.
 Check each screen of the host, since a corner that is free on one screen may hold a label on another.  
 `Val::Auto` leaves an edge unconstrained, so setting `left` and `top` pins the button to the top-left, setting `right` and `bottom` to the bottom-right, and so on.
 
@@ -72,9 +72,9 @@ value is `true`. The focused note editor still receives raw keyboard events.
 1. Start the host with whatever switch it uses to add the plugin.
 2. Click the `UI` button. It turns solid while inspect mode is on.
 3. Hover nodes; the tooltip shows `#id "name" Marker "text" WxH @ (x,y)`.
-4. Click a node. The editor opens below it, or above when there is no room below.
+4. Click a node to comment on it, or click `Game` beside `UI` to comment on the whole game. The editor opens near the node or in the play area for a game note.
 5. Type the note and press `Enter`. An empty note is discarded. `Esc` cancels.
-6. A numbered pin appears left of the node. Pins follow the node and disappear when the node is despawned.
+6. UI notes add a numbered pin next to the node. Game notes are saved without a pin.
 7. Click the `UI` button again, or press `Esc` with no editor open, to leave inspect mode.
 
 ## Reading notes back

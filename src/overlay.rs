@@ -30,8 +30,6 @@ use bevy::{
         Font,
         FontSize,
         FontSource,
-        Justify,
-        LineBreak,
         TextColor,
         TextCursorStyle,
         TextFont,
@@ -61,9 +59,13 @@ const FONT_PX: f32 = 20.0;
 #[derive(Component)]
 struct OverlayRoot;
 #[derive(Component)]
+struct AnnotationToolbar;
+#[derive(Component)]
 struct PencilButton;
 #[derive(Component)]
 struct PencilLabel;
+#[derive(Component)]
+struct GameNoteButton;
 #[derive(Component)]
 struct HighlightRect;
 #[derive(Component)]
@@ -96,6 +98,12 @@ enum EditorAction {
     Cancel,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Selection {
+    Game,
+    Node(Entity),
+}
+
 /// Requests recorded in `PreUpdate` and consumed later in the same frame.
 #[derive(Default)]
 struct Pending {
@@ -109,6 +117,7 @@ struct Pending {
 struct OverlayState {
     root: Option<Entity>,
     pencil: Option<Entity>,
+    game_note: Option<Entity>,
     highlight: Option<Entity>,
     tooltip: Option<Entity>,
     pins_root: Option<Entity>,
@@ -119,9 +128,9 @@ struct OverlayState {
     hovered: Option<(Entity, Rect)>,
     described_hover: Option<Entity>,
     hover_target: Option<UiTarget>,
-    selected: Option<Entity>,
+    selected: Option<Selection>,
     selected_at: Option<Vec2>,
-    described_selected: Option<Entity>,
+    described_selected: Option<Selection>,
     target: Option<UiTarget>,
     click: Option<Vec2>,
     pending: Pending,
@@ -307,7 +316,7 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
                 ))
                 .id();
             state.tooltip = Some(tooltip);
-            let pencil = parent
+            parent
                 .spawn((
                     Node {
                         position_type: PositionType::Absolute,
@@ -315,40 +324,60 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
                         right: config.button_position.right,
                         top: config.button_position.top,
                         bottom: config.button_position.bottom,
-                        width: Val::Px(52.0),
-                        height: Val::Px(40.0),
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::Center,
-                        padding: UiRect::all(Val::Px(6.0)),
-                        border_radius: BorderRadius::all(Val::Px(6.0)),
+                        flex_direction: if config.button_position.left == Val::Auto {
+                            FlexDirection::RowReverse
+                        } else {
+                            FlexDirection::Row
+                        },
+                        column_gap: Val::Px(8.0),
                         ..default()
                     },
-                    BackgroundColor(PANEL_BG),
-                    BorderColor::all(ACCENT),
-                    Outline {
-                        color: ACCENT,
-                        width: Val::Px(2.0),
-                        offset: Val::ZERO,
-                    },
-                    Pickable {
-                        should_block_lower: true,
-                        is_hoverable: true,
-                    },
-                    PencilButton,
-                    GlobalZIndex(i32::MAX),
+                    AnnotationToolbar,
+                    Pickable::IGNORE,
                     OverlayNode,
                 ))
-                .with_child((
-                    Node::default(),
-                    Text::new("UI"),
-                    text_style,
-                    TextColor(ACCENT),
-                    TextLayout::new(Justify::Center, LineBreak::WordBoundary),
-                    OverlayNode,
-                    PencilLabel,
-                ))
-                .id();
-            state.pencil = Some(pencil);
+                .with_children(|toolbar| {
+                    for (pencil, title, width) in [(true, "UI", 52.0), (false, "Game", 76.0)] {
+                        let mut button = toolbar.spawn((
+                            Node {
+                                display: if pencil { Display::Flex } else { Display::None },
+                                width: Val::Px(width),
+                                height: Val::Px(40.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                border_radius: BorderRadius::all(Val::Px(6.0)),
+                                ..default()
+                            },
+                            BackgroundColor(PANEL_BG),
+                            Outline {
+                                color: ACCENT,
+                                width: Val::Px(2.0),
+                                offset: Val::ZERO,
+                            },
+                            Pickable::default(),
+                            GlobalZIndex(i32::MAX),
+                            OverlayNode,
+                        ));
+                        button.with_children(|button| {
+                            let mut text = button.spawn((
+                                Text::new(title),
+                                text_style.clone(),
+                                TextColor(ACCENT),
+                                TextLayout::no_wrap(),
+                                Pickable::IGNORE,
+                                OverlayNode,
+                            ));
+                            if pencil {
+                                text.insert(PencilLabel);
+                            }
+                        });
+                        if pencil {
+                            state.pencil = Some(button.insert(PencilButton).id());
+                        } else {
+                            state.game_note = Some(button.insert(GameNoteButton).id());
+                        }
+                    }
+                });
         })
         .id();
     state.root = Some(root);
@@ -547,6 +576,7 @@ fn refresh_mode(
     mut roots: Query<(&mut Visibility, &mut Pickable), With<OverlayRoot>>,
     mut pencil: Query<&mut BackgroundColor, With<PencilButton>>,
     mut pencil_label: Query<&mut TextColor, With<PencilLabel>>,
+    mut game_note: Query<&mut Node, With<GameNoteButton>>,
 ) {
     if state.pending.toggle {
         state.pending.toggle = false;
@@ -579,6 +609,13 @@ fn refresh_mode(
     for mut color in &mut pencil_label {
         color.0 = if inspecting { Color::BLACK } else { ACCENT };
     }
+    for mut button in &mut game_note {
+        button.display = if inspecting {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
 }
 
 fn update_hover(
@@ -586,15 +623,23 @@ fn update_hover(
     stack: Res<UiStack>,
     windows: Query<&Window, With<PrimaryWindow>>,
     game_nodes: GameNodes,
+    toolbar: Query<(&ComputedNode, &UiGlobalTransform), With<AnnotationToolbar>>,
     mut highlight: Query<(&mut Node, &mut Visibility), With<HighlightRect>>,
 ) {
-    let hovered = if state.visible && state.inspecting {
+    let hovered = if state.visible && state.inspecting && state.editor_panel.is_none() {
         windows
             .single()
             .ok()
             .and_then(|window| window.cursor_position().zip(Some(window.scale_factor())))
             .and_then(|(cursor, scale)| {
-                inspect::topmost_node_at(&stack, &game_nodes, cursor, scale)
+                if toolbar
+                    .single()
+                    .is_ok_and(|(node, transform)| node.contains_point(*transform, cursor * scale))
+                {
+                    None
+                } else {
+                    inspect::topmost_node_at(&stack, &game_nodes, cursor, scale)
+                }
             })
     } else {
         None
@@ -645,21 +690,18 @@ fn handle_click(
         state.selected = None;
         return;
     }
-    if let Some(panel) = state.editor_panel
-        && overlay_hit.is_some_and(|hit| in_subtree(hit, panel, &parents))
+    if !state.inspecting || state.editor_panel.is_some() {
+        return;
+    }
+    state.selected = if let Some(game_note) = state.game_note
+        && overlay_hit.is_some_and(|hit| in_subtree(hit, game_note, &parents))
     {
-        return;
-    }
-    if !state.inspecting {
-        return;
-    }
-    match inspect::topmost_node_at(&stack, &game_nodes, cursor, scale) {
-        Some((entity, _)) => {
-            state.selected = Some(entity);
-            state.selected_at = Some(cursor);
-        }
-        None => state.selected = None,
-    }
+        Some(Selection::Game)
+    } else {
+        inspect::topmost_node_at(&stack, &game_nodes, cursor, scale)
+            .map(|(entity, _)| Selection::Node(entity))
+    };
+    state.selected_at = state.selected.map(|_| cursor);
 }
 
 fn in_subtree(entity: Entity, root: Entity, parents: &Query<&ChildOf>) -> bool {
@@ -694,9 +736,12 @@ fn describe(world: &mut World) {
     let hover_target = hover_changed
         .then(|| hover.and_then(|entity| inspect::describe(world, entity, scale)))
         .flatten();
-    let target = selected_changed
-        .then(|| selected.and_then(|entity| inspect::describe(world, entity, scale)))
-        .flatten();
+    let target = match selected {
+        Some(Selection::Node(entity)) if selected_changed => {
+            inspect::describe(world, entity, scale)
+        }
+        _ => None,
+    };
     {
         let mut state = world.resource_mut::<OverlayState>();
         if hover_changed {
@@ -729,7 +774,18 @@ fn apply_editor_action(world: &mut World, action: EditorAction) {
         .map_or_else(String::new, |editable| {
             editable.value().to_string().trim().to_string()
         });
-    let Some(target) = world.resource::<OverlayState>().target.clone() else {
+    let state = world.resource::<OverlayState>();
+    let target = match state.selected {
+        Some(Selection::Game) => None,
+        Some(Selection::Node(_)) => {
+            let Some(target) = state.target.clone() else {
+                return;
+            };
+            Some(target)
+        }
+        None => return,
+    };
+    let Some(cursor) = state.selected_at else {
         return;
     };
     world.resource_mut::<OverlayState>().selected = None;
@@ -744,7 +800,7 @@ fn apply_editor_action(world: &mut World, action: EditorAction) {
         Note {
             seq: state.seq,
             time_secs,
-            cursor: state.selected_at.unwrap_or(target.rect.center()),
+            cursor,
             window,
             target,
             text,
@@ -754,7 +810,9 @@ fn apply_editor_action(world: &mut World, action: EditorAction) {
     world
         .resource_mut::<NoteSink>()
         .write(&note.to_line(verbose));
-    world.resource_mut::<OverlayState>().pending_pin = Some((note.target.entity, note.seq));
+    if let Some(target) = &note.target {
+        world.resource_mut::<OverlayState>().pending_pin = Some((target.entity, note.seq));
+    }
     world.resource_mut::<NoteHistory>().notes.push(note);
 }
 
@@ -765,24 +823,32 @@ fn sync_editor(
     mut focus: ResMut<InputFocus>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let ready = state.visible
-        && state.inspecting
-        && state.selected.is_some()
-        && state
-            .target
-            .as_ref()
-            .is_some_and(|target| Some(target.entity) == state.selected);
-    if ready {
+    let selection = state.selected.filter(|_| state.visible && state.inspecting);
+    if let Some(selection) = selection {
         if state.editor_panel.is_some() {
             return;
         }
-        let Some(target) = state.target.clone() else {
-            return;
-        };
+
         let window = windows.single().map_or(Vec2::new(1280.0, 720.0), |window| {
             Vec2::new(window.width(), window.height())
         });
-        let (x, y) = editor_placement(target.rect, window);
+        let (title, (x, y)) = match selection {
+            Selection::Game => {
+                (
+                    "Game".to_owned(),
+                    (
+                        ((window.x - EDITOR_WIDTH) / 2.0).max(8.0),
+                        ((window.y - EDITOR_HEIGHT) / 2.0).max(8.0),
+                    ),
+                )
+            }
+            Selection::Node(_) => {
+                let Some(target) = &state.target else {
+                    return;
+                };
+                (target.detail(), editor_placement(target.rect, window))
+            }
+        };
         let font = config.font.clone();
         let mut input_entity = Entity::PLACEHOLDER;
         let panel = commands
@@ -812,7 +878,7 @@ fn sync_editor(
             .with_children(|parent| {
                 parent.spawn((
                     Node::default(),
-                    label(font.as_ref(), &target.detail(), FONT_PX, MUTED, true),
+                    label(font.as_ref(), &title, FONT_PX, MUTED, true),
                     OverlayNode,
                 ));
                 parent

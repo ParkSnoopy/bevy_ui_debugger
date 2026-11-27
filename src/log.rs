@@ -17,16 +17,16 @@ pub const LOG_PREFIX: &str = "UI_DEBUG_NOTE";
 /// File name used inside `log_dir`.
 pub const LOG_FILE: &str = "ui-debug-notes.jsonl";
 
-/// One submitted annotation together with the identity of the node it was written on.
+/// One submitted annotation about the game or a specific UI node.
 #[derive(Clone, Debug)]
 pub struct Note {
     /// 1-based sequence number within the session.
     pub seq: u32,
     /// Seconds of virtual time since the game started.
     pub time_secs: f64,
-    /// The node that was annotated.
-    pub target: UiTarget,
-    /// Logical cursor position when the node was clicked.
+    /// The node that was annotated, or `None` for a whole-game note.
+    pub target: Option<UiTarget>,
+    /// Logical cursor position when the editor was opened.
     pub cursor: Vec2,
     /// Logical size of the primary window.
     pub window: Vec2,
@@ -37,9 +37,8 @@ pub struct Note {
 impl Note {
     /// JSON object describing the note, one line, UTF-8 strings escaped.
     ///
-    /// The short form keeps what is needed to find the node: `entity`, `name`, `markers`,
-    /// `text`, `z`, `ancestry` and `note`. `verbose` adds `seq`, `t`, `rect`, `style`,
-    /// `cursor` and `window` around them.
+    /// Whole-game notes use `scope: "game"` in place of node fields. `verbose`
+    /// adds session and click geometry, plus `rect` and `style` for node notes.
     pub fn to_json(&self, verbose: bool) -> String {
         let strings = |items: &[String]| {
             items
@@ -48,44 +47,46 @@ impl Note {
                 .collect::<Vec<_>>()
                 .join(",")
         };
-        let target = &self.target;
         let mut out = String::from("{");
         if verbose {
             let _ = write!(out, "\"seq\":{},\"t\":{:.3},", self.seq, self.time_secs);
         }
-        let _ = write!(
-            out,
-            "\"entity\":\"{}\",\"name\":{},\"markers\":[{}],\"text\":{},",
-            target.id,
-            target.name.as_deref().map_or("null".to_string(), json_str),
-            strings(&target.markers),
-            target.text.as_deref().map_or("null".to_string(), json_str),
-        );
-        if verbose {
+        if let Some(target) = &self.target {
             let _ = write!(
                 out,
-                "\"rect\":[{:.1},{:.1},{:.1},{:.1}],",
-                target.rect.min.x,
-                target.rect.min.y,
-                target.rect.width(),
-                target.rect.height(),
+                "\"entity\":\"{}\",\"name\":{},\"markers\":[{}],\"text\":{},",
+                target.id,
+                target.name.as_deref().map_or("null".to_string(), json_str),
+                strings(&target.markers),
+                target.text.as_deref().map_or("null".to_string(), json_str),
             );
+            if verbose {
+                let _ = write!(
+                    out,
+                    "\"rect\":[{:.1},{:.1},{:.1},{:.1}],",
+                    target.rect.min.x,
+                    target.rect.min.y,
+                    target.rect.width(),
+                    target.rect.height(),
+                );
+            }
+            let _ = write!(
+                out,
+                "\"z\":{},\"ancestry\":[{}],",
+                target.z_index.map_or("null".to_string(), |z| z.to_string()),
+                strings(&target.ancestry),
+            );
+            if verbose {
+                let _ = write!(out, "\"style\":{},", json_str(&target.style));
+            }
+        } else {
+            out.push_str("\"scope\":\"game\",");
         }
-        let _ = write!(
-            out,
-            "\"z\":{},\"ancestry\":[{}],",
-            target.z_index.map_or("null".to_string(), |z| z.to_string()),
-            strings(&target.ancestry),
-        );
         if verbose {
             let _ = write!(
                 out,
-                "\"style\":{},\"cursor\":[{:.1},{:.1}],\"window\":[{:.1},{:.1}],",
-                json_str(&target.style),
-                self.cursor.x,
-                self.cursor.y,
-                self.window.x,
-                self.window.y,
+                "\"cursor\":[{:.1},{:.1}],\"window\":[{:.1},{:.1}],",
+                self.cursor.x, self.cursor.y, self.window.x, self.window.y,
             );
         }
         let _ = write!(out, "\"note\":{}}}", json_str(&self.text));
@@ -230,7 +231,7 @@ mod tests {
         Note {
             seq: 1,
             time_secs: 11.856,
-            target: UiTarget {
+            target: Some(UiTarget {
                 entity: bevy::ecs::entity::Entity::PLACEHOLDER,
                 id: "329v0".to_owned(),
                 name: Some("top_bar".to_owned()),
@@ -240,7 +241,7 @@ mod tests {
                 z_index: Some(0),
                 ancestry: vec!["Node#328".to_owned()],
                 style: "display=Flex".to_owned(),
-            },
+            }),
             cursor: Vec2::new(996.6, 36.1),
             window: Vec2::new(1280.0, 720.0),
             text: "test for heading".to_owned(),
@@ -264,5 +265,23 @@ mod tests {
         assert!(line.contains("\"rect\":[0.0,0.0,1280.0,56.0]"));
         assert!(line.contains("\"style\":\"display=Flex\""));
         assert!(line.contains("\"cursor\":[996.6,36.1],\"window\":[1280.0,720.0],"));
+    }
+
+    #[test]
+    fn game_note_omits_ui_identity_and_geometry() {
+        let note = Note {
+            target: None,
+            text: "Camera moves too fast".to_owned(),
+            ..sample_note()
+        };
+        assert_eq!(
+            note.to_line(false),
+            "UI_DEBUG_NOTE {\"scope\":\"game\",\"note\":\"Camera moves too fast\"}"
+        );
+        assert_eq!(
+            note.to_line(true),
+            "UI_DEBUG_NOTE {\"seq\":1,\"t\":11.856,\"scope\":\"game\",\
+             \"cursor\":[996.6,36.1],\"window\":[1280.0,720.0],\"note\":\"Camera moves too fast\"}"
+        );
     }
 }
