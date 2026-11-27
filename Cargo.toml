@@ -1,0 +1,32 @@
+[package]
+name = "bevy_ui_debugger"
+version = "0.1.0"
+edition = "2024"
+description = "Opt-in in-game overlay for annotating Bevy UI nodes with uniquely identified log lines"
+license = "LGPL-3.0-or-later"
+readme = "README.md"
+keywords = ["bevy", "ui", "debug", "annotation", "gamedev"]
+categories = ["game-development", "development-tools"]
+
+[features]
+default = ["component-names"]
+# Keeps component type names at runtime so notes can list marker components.
+component-names = ["bevy/debug"]
+
+[dependencies]
+bevy = { version = "0.20.1", default-features = false, features = [
+    "std",
+    "bevy_ui_widgets",
+    "bevy_picking",
+    "ui_picking",
+] }
+
+[dev-dependencies]
+bevy = { version = "0.20.1", default-features = false, features = [
+    "bevy_winit",
+    "bevy_render",
+    "ui_bevy_render",
+    "x11",
+    "wayland",
+    "default_font",
+] }
