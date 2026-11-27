@@ -1,15 +1,14 @@
 # Note format
 
 A note line is the literal prefix `UI_DEBUG_NOTE`, one space, then a single-line JSON object.  
-Strings are UTF-8 with the minimal JSON escapes (`"`, `\`, `\n`, `\r`, `\t`, other control  
-characters as `\u00XX`).
+Strings are UTF-8 with the minimal JSON escapes (`"`, `\`, `\n`, `\r`, `\t`, other control characters as `\u00XX`).
 
 ```text
 UI_DEBUG_NOTE {"entity":"123v4294967296","name":"btn_load","markers":["my_game::ui::MenuButton"],"text":"Load","z":null,"ancestry":["Node#7","side_panel"],"note":"too small, move it up"}
 ```
 
-The short form above is the default. With `UiDebuggerPlugin::verbose` the object also carries `seq`, `t`,  
-`rect`, `style`, `cursor` and `window`, in this order:
+The short form above is the default.  
+With `UiDebuggerPlugin::verbose` the object also carries `seq`, `t`, `rect`, `style`, `cursor` and `window`, in this order:
 
 ```text
 UI_DEBUG_NOTE {"seq":1,"t":12.480,"entity":"123v4294967296","name":"btn_load","markers":["my_game::ui::MenuButton"],"text":"Load","rect":[16.0,150.0,228.0,44.0],"z":null,"ancestry":["Node#7","side_panel"],"style":"display=Flex ...","cursor":[130.0,152.0],"window":[1280.0,720.0],"note":"too small, move it up"}
@@ -35,12 +34,12 @@ UI_DEBUG_NOTE {"seq":1,"t":12.480,"entity":"123v4294967296","name":"btn_load","m
 
 ## Using a note
 
-To find the node in code, search for the marker type or the `Name`. When neither exists the  
-`ancestry` and `text` fields usually locate it. To reproduce a layout problem, enable `verbose`:  
-`rect`, `window` and `style` give the observed geometry, so compare them with what the code  
-intends.
+To find the node in code, search for the marker type or the `Name`.  
+When neither exists the `ancestry` and `text` fields usually locate it.  
+To reproduce a layout problem, enable `verbose`: `rect`, `window` and `style` give the observed geometry, so compare them with what the code intends.
 
 ## Stability
 
-The set of fields is not versioned. New fields may be added at the end of the object; existing  
-fields keep their names and meaning. Parse by key, not by position.
+The set of fields is not versioned.  
+New fields may be added at the end of the object; existing fields keep their names and meaning.  
+Parse by key, not by position.

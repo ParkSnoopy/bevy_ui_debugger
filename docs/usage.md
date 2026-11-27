@@ -2,9 +2,8 @@
 
 ## Opting in
 
-The overlay should never ship enabled by default. The crate reads no command-line arguments  
-and no environment variables, so the host decides when to add the plugin and passes every  
-option as a plugin field:
+The overlay should never ship enabled by default.  
+The crate reads no command-line arguments and no environment variables, so the host decides when to add the plugin and passes every option as a plugin field:
 
 ```rust
 if args.ui_debug {
@@ -19,7 +18,8 @@ if args.ui_debug {
 
 ### Verbose notes
 
-Notes are short by default. Set `UiDebuggerPlugin::verbose` to `true` for the full detail.  
+Notes are short by default.  
+Set `UiDebuggerPlugin::verbose` to `true` for the full detail.  
 The host chooses how to expose it, for example as a `-v`/`--verbose` flag.
 
 ## Plugin settings
@@ -45,34 +45,30 @@ app.add_plugins(UiDebuggerPlugin {
 
 ### Fonts and non-Latin text
 
-Bevy's built-in font has no CJK glyphs. If the host UI shows such text, pass the host's font so  
-the tooltip, the editor header and the typed note render correctly.
+Bevy's built-in font has no CJK glyphs.  
+If the host UI shows such text, pass the host's font so the tooltip, the editor header and the typed note render correctly.
 
 ### Button placement
 
-Pick a spot the host UI does not use. Check each screen of the host, since a corner that is free  
-on one screen may hold a label on another. `Val::Auto` leaves an edge unconstrained, so setting  
-`left` and `top` pins the button to the top-left, setting `right` and `bottom` to the  
-bottom-right, and so on.
+Pick a spot the host UI does not use.  
+Check each screen of the host, since a corner that is free on one screen may hold a label on another.  
+`Val::Auto` leaves an edge unconstrained, so setting `left` and `top` pins the button to the top-left, setting `right` and `bottom` to the bottom-right, and so on.
 
 ## Workflow
 
-1. Start the host with whatever switch it uses to add the plugin.  
-2. Click the `UI` button. It turns solid while inspect mode is on.  
-3. Hover nodes; the tooltip shows `#id "name" Marker "text" WxH @ (x,y)`.  
-4. Click a node. The editor opens below it, or above when there is no room below.  
-5. Type the note and press `Enter`. An empty note is discarded. `Esc` cancels.  
-6. A numbered pin appears left of the node. Pins follow the node and disappear when the node  
-   is despawned.
+1. Start the host with whatever switch it uses to add the plugin.
+2. Click the `UI` button. It turns solid while inspect mode is on.
+3. Hover nodes; the tooltip shows `#id "name" Marker "text" WxH @ (x,y)`.
+4. Click a node. The editor opens below it, or above when there is no room below.
+5. Type the note and press `Enter`. An empty note is discarded. `Esc` cancels.
+6. A numbered pin appears left of the node. Pins follow the node and disappear when the node is despawned.
 7. Click the `UI` button again, or press `Esc` with no editor open, to leave inspect mode.
 
 ## Reading notes back
 
 Notes are written in two places:
 
-- **stderr**, once, when the game ends. The engine's own output is verbose, so notes are  
-  held in memory and printed together as one block, one line each, prefixed with  
-  `UI_DEBUG_NOTE `:  
+- **stderr**, once, when the game ends. The engine's own output is verbose, so notes are held in memory and printed together as one block, one line each, prefixed with `UI_DEBUG_NOTE `:
   ```text
   
   --- UI_DEBUG_NOTES ---
@@ -82,11 +78,8 @@ Notes are written in two places:
   
   ```
   Nothing is printed when no note was saved.
-- **`<log_dir>/ui-debug-notes.jsonl`**, the same lines, appended as each note is saved so they  
-  survive a crash. The file is opened in append mode, so several sessions accumulate. Run with  
-  `verbose` to get the `seq` and `t` fields that tell them apart.
+- **`<log_dir>/ui-debug-notes.jsonl`**, the same lines, appended as each note is saved so they survive a crash. The file is opened in append mode, so several sessions accumulate. Run with `verbose` to get the `seq` and `t` fields that tell them apart.
 
-Inside the process every note is also kept in the `NoteHistory` resource (`notes: Vec<Note>`),  
-newest last, for tests or custom export.
+Inside the process every note is also kept in the `NoteHistory` resource (`notes: Vec<Note>`), newest last, for tests or custom export.
 
 Field meanings are in [note-format.md](note-format.md).
