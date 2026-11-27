@@ -8,15 +8,11 @@ Review feedback written against the running UI can be pasted straight into a bug
 
 ## What it does
 
-- A small `UI` button toggles **inspect mode**.  
-- In inspect mode the topmost UI node under the cursor is highlighted,  
-  and a tooltip shows its identity.
-- Clicking a node opens a one-line editor.  
-  `Enter` saves, `Esc` cancels.  
-- Each saved note is a `UI_DEBUG_NOTE {...}` JSON line.  
-  Lines are kept in memory and printed to stderr as one block between `---` separators when the game ends,  
-  and appended to a JSONL file as they are saved when a log directory is configured.
-- A numbered pin stays next to every annotated node.  
+- A small `UI` button toggles **inspect mode**.
+- In inspect mode the topmost UI node under the cursor is highlighted, and a tooltip shows its identity.
+- Clicking a node opens a one-line editor. `Enter` saves, `Esc` cancels.
+- Each saved note is a `UI_DEBUG_NOTE {...}` JSON line. Lines are kept in memory and printed to stderr as one block between `---` separators when the game ends, and appended to a JSONL file as they are saved when a log directory is configured.
+- A numbered pin stays next to every annotated node.
 - While inspecting, clicks and keys are kept away from the host game.
 
 ## Quick start
@@ -59,9 +55,8 @@ cargo run --example annotate -- --script ./shots
 
 ## Requirements
 
-- A primary window. Hit testing and note coordinates use the primary window only.  
-- Systems of the host game that read input must run `.after(InputSystems)`;  
-  see [docs/input-handling.md](docs/input-handling.md).
+- A primary window. Hit testing and note coordinates use the primary window only.
+- Systems of the host game that read input must run `.after(InputSystems)`; see [docs/input-handling.md](docs/input-handling.md).
 
 ## Documentation
 
