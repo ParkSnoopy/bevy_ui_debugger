@@ -201,10 +201,15 @@ mod tests {
 
     #[test]
     fn block_is_framed_and_ordered() {
-        let lines = vec!["UI_DEBUG_NOTE {a}".to_owned(), "UI_DEBUG_NOTE {b}".to_owned()];
+        let lines = vec![
+            "UI_DEBUG_NOTE {a}".to_owned(),
+            "UI_DEBUG_NOTE {b}".to_owned(),
+        ];
         assert_eq!(
             format_block(&lines).as_deref(),
-            Some("\n--- UI_DEBUG_NOTES ---\nUI_DEBUG_NOTE {a}\nUI_DEBUG_NOTE {b}\n--- END UI_DEBUG_NOTES ---\n")
+            Some(
+                "\n--- UI_DEBUG_NOTES ---\nUI_DEBUG_NOTE {a}\nUI_DEBUG_NOTE {b}\n--- END UI_DEBUG_NOTES ---\n"
+            )
         );
     }
 

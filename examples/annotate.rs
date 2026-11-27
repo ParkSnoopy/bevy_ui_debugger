@@ -12,7 +12,7 @@ use bevy::{
         mouse::MouseButtonInput,
     },
     prelude::*,
-    render::view::screenshot::{save_to_disk, Screenshot},
+    render::view::screenshot::{Screenshot, save_to_disk},
     ui_widgets::Button,
     window::{CursorMoved, PrimaryWindow, WindowEvent},
 };
@@ -48,12 +48,10 @@ fn main() -> std::io::Result<()> {
         ..default()
     };
     let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(window),
-            ..default()
-        }),
-    );
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(window),
+        ..default()
+    }));
     // A real game gates this on its own command-line flag or setting.
     app.add_plugins(UiDebuggerPlugin {
         log_dir: script.clone(),
@@ -111,66 +109,69 @@ fn spawn_ui(mut commands: Commands) {
                     TextColor(Color::srgb(0.6, 0.64, 0.7)),
                 ));
             });
-            root.spawn(Node { flex_grow: 1.0, ..default() })
-                .with_children(|body| {
-                    body.spawn((
-                        Name::new("side_panel"),
-                        Node {
-                            width: Val::Px(260.0),
-                            padding: UiRect::all(Val::Px(16.0)),
-                            flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(12.0),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.11, 0.12, 0.15)),
-                    ))
-                    .with_children(|panel| {
-                        for (name, caption) in [
-                            ("btn_new_run", "New run"),
-                            ("btn_load", "Load"),
-                            ("", "Settings"),
-                        ] {
-                            let mut button = panel.spawn((
-                                Node {
-                                    height: Val::Px(44.0),
-                                    align_items: AlignItems::Center,
-                                    justify_content: JustifyContent::Center,
-                                    ..default()
-                                },
-                                Button,
-                                MenuButton,
-                                BackgroundColor(Color::srgb(0.2, 0.22, 0.28)),
-                            ));
-                            if !name.is_empty() {
-                                button.insert(Name::new(name));
-                            }
-                            button.with_child((
-                                Text::new(caption),
-                                TextFont {
-                                    font_size: FontSize::Px(20.0),
-                                    ..default()
-                                },
-                            ));
+            root.spawn(Node {
+                flex_grow: 1.0,
+                ..default()
+            })
+            .with_children(|body| {
+                body.spawn((
+                    Name::new("side_panel"),
+                    Node {
+                        width: Val::Px(260.0),
+                        padding: UiRect::all(Val::Px(16.0)),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(12.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.11, 0.12, 0.15)),
+                ))
+                .with_children(|panel| {
+                    for (name, caption) in [
+                        ("btn_new_run", "New run"),
+                        ("btn_load", "Load"),
+                        ("", "Settings"),
+                    ] {
+                        let mut button = panel.spawn((
+                            Node {
+                                height: Val::Px(44.0),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Button,
+                            MenuButton,
+                            BackgroundColor(Color::srgb(0.2, 0.22, 0.28)),
+                        ));
+                        if !name.is_empty() {
+                            button.insert(Name::new(name));
                         }
-                    });
-                    body.spawn((
-                        Name::new("hud_depth"),
-                        Node {
-                            flex_grow: 1.0,
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.16, 0.18, 0.22)),
-                    ))
-                    .with_child((
-                        Text::new("depth 3 / courage 12"),
-                        TextFont {
-                            font_size: FontSize::Px(28.0),
-                            ..default()
-                        },
-                    ));
+                        button.with_child((
+                            Text::new(caption),
+                            TextFont {
+                                font_size: FontSize::Px(20.0),
+                                ..default()
+                            },
+                        ));
+                    }
                 });
+                body.spawn((
+                    Name::new("hud_depth"),
+                    Node {
+                        flex_grow: 1.0,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.16, 0.18, 0.22)),
+                ))
+                .with_child((
+                    Text::new("depth 3 / courage 12"),
+                    TextFont {
+                        font_size: FontSize::Px(28.0),
+                        ..default()
+                    },
+                ));
+            });
             root.spawn((
                 Name::new("bottom_bar"),
                 Node {

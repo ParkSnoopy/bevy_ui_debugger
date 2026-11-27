@@ -119,10 +119,7 @@ impl UiTarget {
 
 /// Axis-aligned logical rect of a laid-out node.
 pub(crate) fn node_rect(node: &ComputedNode, transform: &UiGlobalTransform, scale: f32) -> Rect {
-    Rect::from_center_half_size(
-        transform.translation / scale,
-        node.size / (2.0 * scale),
-    )
+    Rect::from_center_half_size(transform.translation / scale, node.size / (2.0 * scale))
 }
 
 /// Topmost visible game node under the logical cursor position, innermost stack order first.
@@ -161,11 +158,7 @@ pub(crate) fn describe(world: &World, entity: Entity, scale: f32) -> Option<UiTa
 
     Some(UiTarget {
         entity,
-        id: format!(
-            "{}v{}",
-            entity.index_u32(),
-            entity.generation().to_bits()
-        ),
+        id: format!("{}v{}", entity.index_u32(), entity.generation().to_bits()),
         name: entity_ref.get::<Name>().map(|n| n.as_str().to_string()),
         markers: markers_of(entity_ref, components, &registry),
         text: collect_text(world, entity),
@@ -179,20 +172,19 @@ pub(crate) fn describe(world: &World, entity: Entity, scale: f32) -> Option<UiTa
     })
 }
 
-fn markers_of(
-    entity: EntityRef,
-    components: &Components,
-    registry: &TypeRegistry,
-) -> Vec<String> {
+fn markers_of(entity: EntityRef, components: &Components, registry: &TypeRegistry) -> Vec<String> {
     let mut markers = Vec::new();
     for id in entity.archetype().components() {
         let Some(info) = components.get_info(*id) else {
             continue;
         };
-        let path = info.type_id().and_then(|type_id| registry.get(type_id)).map_or_else(
-            || info.name().to_string(),
-            |registration| registration.type_info().type_path().to_string(),
-        );
+        let path = info
+            .type_id()
+            .and_then(|type_id| registry.get(type_id))
+            .map_or_else(
+                || info.name().to_string(),
+                |registration| registration.type_info().type_path().to_string(),
+            );
         // Without bevy's `debug` feature unreflected names are an angle-bracket placeholder.
         if path.starts_with('<') || is_engine_path(&path) {
             continue;
@@ -260,18 +252,16 @@ fn ancestry(world: &World, entity: Entity) -> Vec<String> {
     path
 }
 
-fn node_label(
-    entity: EntityRef,
-    components: &Components,
-    registry: &TypeRegistry,
-) -> String {
+fn node_label(entity: EntityRef, components: &Components, registry: &TypeRegistry) -> String {
     if let Some(name) = entity.get::<Name>() {
         return name.as_str().to_string();
     }
-    markers_of(entity, components, registry).first().map_or_else(
-        || format!("Node#{}", entity.id().index_u32()),
-        |marker| short_path(marker).to_string(),
-    )
+    markers_of(entity, components, registry)
+        .first()
+        .map_or_else(
+            || format!("Node#{}", entity.id().index_u32()),
+            |marker| short_path(marker).to_string(),
+        )
 }
 
 fn truncate(text: &str, max: usize) -> String {
@@ -284,12 +274,7 @@ fn truncate(text: &str, max: usize) -> String {
 }
 
 fn style_summary(node: &Node) -> String {
-    let rect = |r: &UiRect| {
-        format!(
-            "{:?} {:?} {:?} {:?}",
-            r.left, r.top, r.right, r.bottom
-        )
-    };
+    let rect = |r: &UiRect| format!("{:?} {:?} {:?} {:?}", r.left, r.top, r.right, r.bottom);
     format!(
         "display={:?} position={:?} size=({:?}, {:?}) min=({:?}, {:?}) max=({:?}, {:?}) \
          padding=[{}] margin=[{}] border=[{}] flex={:?} wrap={:?} grow={} basis={:?} \

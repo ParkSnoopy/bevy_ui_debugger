@@ -15,16 +15,29 @@ use bevy::{
         world::World,
     },
     input::{
-        ButtonInput, ButtonState, InputSystems,
+        ButtonInput,
+        ButtonState,
+        InputSystems,
         keyboard::{Key, KeyCode, KeyboardInput, keyboard_input_system},
         mouse::{MouseButton, MouseButtonInput, mouse_button_input_system},
     },
     input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusSystems},
     picking::Pickable,
     prelude::*,
-    text::{EditableText, Font, FontSize, FontSource, Justify, LineBreak, TextColor, TextCursorStyle, TextFont, TextLayout},
+    text::{
+        EditableText,
+        Font,
+        FontSize,
+        FontSource,
+        Justify,
+        LineBreak,
+        TextColor,
+        TextCursorStyle,
+        TextFont,
+        TextLayout,
+    },
     time::Time,
-    ui::{widget::Text, ComputedNode, UiGlobalTransform, UiStack},
+    ui::{ComputedNode, UiGlobalTransform, UiStack, widget::Text},
     ui_widgets::{TextInput, TextInputPlugin, UiWidgetsPlugins},
     window::{PrimaryWindow, Window},
 };
@@ -337,7 +350,8 @@ fn print_notes_on_exit(mut exits: MessageReader<AppExit>, mut sink: ResMut<NoteS
 }
 
 fn font_source(font: Option<&Handle<Font>>) -> FontSource {
-    font.cloned().map_or_else(FontSource::default, FontSource::Handle)
+    font.cloned()
+        .map_or_else(FontSource::default, FontSource::Handle)
 }
 
 fn label(
@@ -523,12 +537,10 @@ fn update_hover(
         windows
             .single()
             .ok()
-            .and_then(|window| {
-                window
-                    .cursor_position()
-                    .zip(Some(window.scale_factor()))
+            .and_then(|window| window.cursor_position().zip(Some(window.scale_factor())))
+            .and_then(|(cursor, scale)| {
+                inspect::topmost_node_at(&stack, &game_nodes, cursor, scale)
             })
-            .and_then(|(cursor, scale)| inspect::topmost_node_at(&stack, &game_nodes, cursor, scale))
     } else {
         None
     };
@@ -684,7 +696,9 @@ fn apply_editor_action(world: &mut World, action: EditorAction) {
         }
     };
     let verbose = world.resource::<Config>().verbose;
-    world.resource_mut::<NoteSink>().write(&note.to_line(verbose));
+    world
+        .resource_mut::<NoteSink>()
+        .write(&note.to_line(verbose));
     world.resource_mut::<OverlayState>().pending_pin = Some((note.target.entity, note.seq));
     world.resource_mut::<NoteHistory>().notes.push(note);
 }
@@ -785,7 +799,13 @@ fn sync_editor(
                             .id();
                         row.spawn((
                             Node::default(),
-                            label(font.as_ref(), "Enter save / Esc cancel", FONT_PX, MUTED, false),
+                            label(
+                                font.as_ref(),
+                                "Enter save / Esc cancel",
+                                FONT_PX,
+                                MUTED,
+                                false,
+                            ),
                             OverlayNode,
                         ));
                     });
@@ -810,7 +830,10 @@ fn editor_placement(rect: Rect, window: Vec2) -> (f32, f32) {
     } else {
         (rect.min.y - EDITOR_HEIGHT - 8.0).max(8.0)
     };
-    let x = rect.min.x.clamp(8.0, (window.x - EDITOR_WIDTH - 8.0).max(8.0));
+    let x = rect
+        .min
+        .x
+        .clamp(8.0, (window.x - EDITOR_WIDTH - 8.0).max(8.0));
     (x, y)
 }
 
@@ -873,7 +896,13 @@ fn update_pins(
             ))
             .with_child((
                 Node::default(),
-                label(config.font.as_ref(), &seq.to_string(), FONT_PX, Color::BLACK, false),
+                label(
+                    config.font.as_ref(),
+                    &seq.to_string(),
+                    FONT_PX,
+                    Color::BLACK,
+                    false,
+                ),
                 OverlayNode,
             ));
     }
@@ -923,8 +952,12 @@ fn update_tooltip(
         return;
     };
     let size = computed.size / window.scale_factor();
-    let x = (cursor.x + 18.0).min(window.width() - size.x - 8.0).max(8.0);
-    let y = (cursor.y + 22.0).min(window.height() - size.y - 8.0).max(8.0);
+    let x = (cursor.x + 18.0)
+        .min(window.width() - size.x - 8.0)
+        .max(8.0);
+    let y = (cursor.y + 22.0)
+        .min(window.height() - size.y - 8.0)
+        .max(8.0);
     node.left = Val::Px(x);
     node.top = Val::Px(y);
 }
