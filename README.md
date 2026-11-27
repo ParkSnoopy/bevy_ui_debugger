@@ -22,7 +22,7 @@ into a bug report, an issue or an agent prompt.
 
 ```toml
 [dependencies]
-bevy_ui_debugger = { path = "../bevy_ui_debugger" }
+bevy_ui_debugger = { git = "https://github.com/ParkSnoopy/bevy_ui_debugger", version = "0.1" }
 ```
 
 ```rust
@@ -49,9 +49,14 @@ cargo run --example annotate
 cargo run --example annotate -- --script ./shots
 ```
 
+## Bevy support
+
+| bevy | bevy_ui_debugger |
+| --- | --- |
+| 0.20 | 0.1 |
+
 ## Requirements
 
-- Bevy `0.20.1`.  
 - A primary window. Hit testing and note coordinates use the primary window only.  
 - Systems of the host game that read input must run `.after(InputSystems)`; see  
   [docs/input-handling.md](docs/input-handling.md).
