@@ -1,6 +1,6 @@
 [package]
 name = "bevy_ui_debugger"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Opt-in in-game overlay for annotating Bevy UI nodes with uniquely identified log lines"
 license = "LGPL-3.0-or-later"
