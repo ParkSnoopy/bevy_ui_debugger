@@ -54,6 +54,11 @@ Pick a spot the host UI does not use.
 Check each screen of the host, since a corner that is free on one screen may hold a label on another.  
 `Val::Auto` leaves an edge unconstrained, so setting `left` and `top` pins the button to the top-left, setting `right` and `bottom` to the bottom-right, and so on.
 
+### Excluding decorative nodes
+
+Add `bevy_ui_debugger::IgnoreUiDebugPick` to decorative nodes, such as a full-screen vignette, to let the debugger select the nodes behind them.
+This marker does not affect rendering or Bevy gameplay picking, and does not exclude descendants.
+
 ## Workflow
 
 1. Start the host with whatever switch it uses to add the plugin.

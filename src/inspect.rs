@@ -24,6 +24,11 @@ use bevy::{
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct OverlayNode;
 
+/// Skip this node when picking an annotation target, without changing gameplay picking.
+/// Descendants remain eligible unless they also carry this marker.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct IgnoreUiDebugPick;
+
 /// Game UI nodes that can be inspected, in the shape hit testing needs.
 pub(crate) type GameNodes<'w, 's> = Query<
     'w,
@@ -36,7 +41,7 @@ pub(crate) type GameNodes<'w, 's> = Query<
         Option<&'static InheritedVisibility>,
         Option<&'static CalculatedClip>,
     ),
-    (With<Node>, Without<OverlayNode>),
+    (With<Node>, Without<OverlayNode>, Without<IgnoreUiDebugPick>),
 >;
 
 /// Identity of a UI node at the moment it was annotated.
@@ -321,4 +326,36 @@ pub(crate) fn primary_window_scale(world: &mut World) -> f32 {
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .single(world)
         .map_or(1.0, Window::scale_factor)
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::system::SystemState;
+
+    use super::*;
+
+    #[test]
+    fn annotation_can_pick_through_an_explicitly_excluded_node() {
+        let mut world = World::new();
+        let mut spawn_node = || {
+            let mut computed = ComputedNode::default();
+            computed.size = Vec2::splat(100.0);
+            world
+                .spawn((Node::default(), computed, InheritedVisibility::VISIBLE))
+                .id()
+        };
+        let target = spawn_node();
+        let overlay = spawn_node();
+        let stack = UiStack {
+            uinodes: vec![target, overlay],
+            ..default()
+        };
+        let mut nodes = SystemState::<GameNodes>::new(&mut world);
+        let hit = |nodes: GameNodes| {
+            topmost_node_at(&stack, &nodes, Vec2::ZERO, 1.0).map(|(entity, _)| entity)
+        };
+        assert_eq!(nodes.get(&world).ok().and_then(hit), Some(overlay));
+        world.entity_mut(overlay).insert(IgnoreUiDebugPick);
+        assert_eq!(nodes.get(&world).ok().and_then(hit), Some(target));
+    }
 }
