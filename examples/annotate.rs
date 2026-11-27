@@ -36,7 +36,7 @@ const HUD_TEXT: Vec2 = Vec2::new(790.0, 356.0);
 const NOTE_A: &str = "Load button: too small, move it up";
 const NOTE_B: &str = "Make this bigger";
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let script = args
         .iter()
@@ -60,7 +60,7 @@ fn main() {
         ..Default::default()
     });
     if let Some(dir) = script {
-        std::fs::create_dir_all(&dir).expect("create shots dir");
+        std::fs::create_dir_all(&dir)?;
         app.insert_resource(Script {
             frame: 0,
             typed: 0,
@@ -69,6 +69,7 @@ fn main() {
         app.add_systems(Update, run_script);
     }
     app.add_systems(Startup, spawn_ui).run();
+    Ok(())
 }
 
 fn spawn_ui(mut commands: Commands) {
@@ -201,18 +202,15 @@ fn run_script(world: &mut World) {
     };
     match frame {
         10 => move_cursor(world, PENCIL),
-        14 => click(world),
+        14 | 34 | 104 => click(world),
         20 => move_cursor(world, BTN_LOAD),
         30 => shot(world, "01_hover"),
-        34 => click(world),
         40 => shot(world, "02_editor"),
         44..=78 => type_text(world, NOTE_A),
         82 => shot(world, "03_typed"),
-        86 => press(world, KeyCode::Enter, Key::Enter),
+        86 | 134 => press(world, KeyCode::Enter, &Key::Enter),
         96 => move_cursor(world, HUD_TEXT),
-        104 => click(world),
         112..=127 => type_text(world, NOTE_B),
-        134 => press(world, KeyCode::Enter, Key::Enter),
         140 => move_cursor(world, BTN_SETTINGS),
         150 => shot(world, "04_pins"),
         156 => finish(world),
@@ -235,7 +233,7 @@ fn move_cursor(world: &mut World, position: Vec2) {
         .get_entity(window)
         .ok()
         .and_then(|entity| entity.get::<Window>())
-        .map_or(1.0, |window| window.scale_factor());
+        .map_or(1.0, Window::scale_factor);
     if let Some(mut window) = world.get_mut::<Window>(window) {
         window.set_physical_cursor_position(Some((position * scale).as_dvec2()));
     }
@@ -267,7 +265,7 @@ fn click(world: &mut World) {
 }
 
 /// Sends a press and its release, like a real key tap.
-fn tap(world: &mut World, key_code: KeyCode, logical_key: Key, text: Option<String>) {
+fn tap(world: &mut World, key_code: KeyCode, logical_key: &Key, text: Option<&str>) {
     let Some(window) = primary_window(world) else {
         return;
     };
@@ -277,7 +275,7 @@ fn tap(world: &mut World, key_code: KeyCode, logical_key: Key, text: Option<Stri
             logical_key: logical_key.clone(),
             state,
             text: (state == ButtonState::Pressed)
-                .then(|| text.clone().map(Into::into))
+                .then(|| text.map(Into::into))
                 .flatten(),
             repeat: false,
             window,
@@ -287,7 +285,7 @@ fn tap(world: &mut World, key_code: KeyCode, logical_key: Key, text: Option<Stri
     }
 }
 
-fn press(world: &mut World, key_code: KeyCode, logical_key: Key) {
+fn press(world: &mut World, key_code: KeyCode, logical_key: &Key) {
     tap(world, key_code, logical_key, None);
 }
 
@@ -297,11 +295,12 @@ fn type_text(world: &mut World, text: &str) {
         return;
     };
     world.resource_mut::<Script>().typed += 1;
+    let typed = ch.to_string();
     tap(
         world,
         KeyCode::Unidentified(NativeKeyCode::Unidentified),
-        Key::Character(ch.to_string().into()),
-        Some(ch.to_string()),
+        &Key::Character(typed.as_str().into()),
+        Some(&typed),
     );
 }
 
@@ -314,14 +313,11 @@ fn shot(world: &mut World, name: &str) {
 
 fn finish(world: &mut World) {
     let count = world.resource::<NoteHistory>().notes.len();
-    for note in &world.resource::<NoteHistory>().notes {
-        println!("{}", note.to_line());
-    }
     if count == 2 {
-        println!("SCRIPT OK: {count} notes");
+        info!("script ok: {count} notes");
         world.write_message(AppExit::Success);
     } else {
-        eprintln!("SCRIPT FAILED: expected 2 notes, got {count}");
+        error!("script failed: expected 2 notes, got {count}");
         world.write_message(AppExit::error());
     }
 }

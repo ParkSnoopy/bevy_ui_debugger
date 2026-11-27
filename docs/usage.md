@@ -26,7 +26,7 @@ environment variable. The function scans `std::env::args_os` and does not consum
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `toggle_key` | `KeyCode::F10` | Shows or hides the whole overlay. |
-| `log_dir` | `None` | Directory that receives `ui-debug-notes.jsonl`. Created if missing. Notes always go to stderr as well. |
+| `log_dir` | `None` | Directory that receives `ui-debug-notes.jsonl`. Created if missing. Notes are also printed to stderr when the game ends. |
 | `font` | `None` | Font for all overlay text. Without it Bevy's default font is used when one is compiled in. |
 | `button_position` | bottom-right, 12 px inset | `UiRect` of absolute offsets for the toggle button. |
 
@@ -66,10 +66,21 @@ bottom-right, and so on.
 
 Notes are written in two places:
 
-- **stderr**, one line each, prefixed with `UI_DEBUG_NOTE `. Filter a noisy log with  
-  `grep '^UI_DEBUG_NOTE '`.
-- **`<log_dir>/ui-debug-notes.jsonl`**, the same lines. The file is opened in append mode, so  
-  several sessions accumulate. Use the `seq` and `t` fields to tell them apart.
+- **stderr**, once, when the game ends. The engine's own output is verbose, so notes are  
+  held in memory and printed together as one block, one line each, prefixed with  
+  `UI_DEBUG_NOTE `:  
+  ```text
+  
+  --- UI_DEBUG_NOTES ---
+  UI_DEBUG_NOTE {...}
+  UI_DEBUG_NOTE {...}
+  --- END UI_DEBUG_NOTES ---
+  
+  ```
+  Nothing is printed when no note was saved.
+- **`<log_dir>/ui-debug-notes.jsonl`**, the same lines, appended as each note is saved so they  
+  survive a crash. The file is opened in append mode, so several sessions accumulate. Use the  
+  `seq` and `t` fields to tell them apart.
 
 Inside the process every note is also kept in the `NoteHistory` resource (`notes: Vec<Note>`),  
 newest last, for tests or custom export.

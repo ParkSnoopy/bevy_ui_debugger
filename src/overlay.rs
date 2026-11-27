@@ -81,6 +81,15 @@ enum EditorAction {
     Cancel,
 }
 
+/// Requests recorded in `PreUpdate` and consumed later in the same frame.
+#[derive(Default)]
+struct Pending {
+    /// The toggle key was pressed.
+    toggle: bool,
+    /// This frame's input was meant for the overlay even though inspect mode is off.
+    swallow: bool,
+}
+
 #[derive(Resource, Default)]
 struct OverlayState {
     root: Option<Entity>,
@@ -92,7 +101,6 @@ struct OverlayState {
     editor_input: Option<Entity>,
     visible: bool,
     inspecting: bool,
-    toggle_requested: bool,
     hovered: Option<(Entity, Rect)>,
     described_hover: Option<Entity>,
     hover_target: Option<UiTarget>,
@@ -101,8 +109,7 @@ struct OverlayState {
     described_selected: Option<Entity>,
     target: Option<UiTarget>,
     click: Option<Vec2>,
-    /// This frame's input was meant for the overlay even though inspect mode is off.
-    swallow: bool,
+    pending: Pending,
     editor_action: Option<EditorAction>,
     seq: u32,
     pending_pin: Option<(Entity, u32)>,
@@ -115,7 +122,8 @@ struct OverlayState {
 pub struct UiDebuggerPlugin {
     /// Key that shows or hides the whole overlay.
     pub toggle_key: KeyCode,
-    /// Directory that receives `ui-debug-notes.jsonl`. Notes always go to stderr as well.
+    /// Directory that receives `ui-debug-notes.jsonl`. Notes are also printed to stderr as one
+    /// block when the game ends.
     pub log_dir: Option<PathBuf>,
     /// Font used by the overlay. Without it Bevy's default font is used when available.
     pub font: Option<Handle<Font>>,
@@ -148,6 +156,7 @@ impl Plugin for UiDebuggerPlugin {
             })
             .insert_resource(NoteSink::open(self.log_dir.clone()))
             .add_systems(Startup, spawn_overlay)
+            .add_systems(Last, print_notes_on_exit)
             .add_systems(PreUpdate, (read_hotkey, capture_click).chain())
             .add_systems(
                 PreUpdate,
@@ -180,7 +189,7 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
     let font = config.font.clone();
     let text_style = TextFont {
         font_size: FontSize::Px(FONT_PX),
-        font: font_source(&font),
+        font: font_source(font.as_ref()),
         ..default()
     };
     let root = commands
@@ -308,18 +317,25 @@ fn spawn_overlay(mut commands: Commands, config: Res<Config>, mut state: ResMut<
         .id();
     state.root = Some(root);
     state.visible = true;
-    eprintln!(
+    info!(
         "bevy_ui_debugger overlay active: toggle with {:?}, click the corner button to annotate",
         config.toggle_key
     );
 }
 
-fn font_source(font: &Option<Handle<Font>>) -> FontSource {
-    font.clone().map_or_else(FontSource::default, FontSource::Handle)
+/// Prints the buffered notes as one block once the game is asked to exit.
+fn print_notes_on_exit(mut exits: MessageReader<AppExit>, mut sink: ResMut<NoteSink>) {
+    if exits.read().next().is_some() {
+        sink.print_all();
+    }
+}
+
+fn font_source(font: Option<&Handle<Font>>) -> FontSource {
+    font.cloned().map_or_else(FontSource::default, FontSource::Handle)
 }
 
 fn label(
-    font: &Option<Handle<Font>>,
+    font: Option<&Handle<Font>>,
     body: &str,
     size: f32,
     color: Color,
@@ -352,8 +368,8 @@ fn read_hotkey(
             continue;
         }
         if input.key_code == config.toggle_key {
-            state.toggle_requested = true;
-            state.swallow = true;
+            state.pending.toggle = true;
+            state.pending.swallow = true;
         } else if input.logical_key == Key::Escape
             && state.visible
             && state.inspecting
@@ -361,7 +377,7 @@ fn read_hotkey(
         {
             state.inspecting = false;
             state.selected = None;
-            state.swallow = true;
+            state.pending.swallow = true;
         }
     }
 }
@@ -393,7 +409,7 @@ fn capture_click(
                 .iter()
                 .any(|(node, transform)| node.contains_point(*transform, point))
         {
-            state.swallow = true;
+            state.pending.swallow = true;
         }
     }
 }
@@ -405,7 +421,7 @@ fn suppress_game_input(
     mut mouse: ResMut<ButtonInput<MouseButton>>,
     mut state: ResMut<OverlayState>,
 ) {
-    let swallow = std::mem::take(&mut state.swallow);
+    let swallow = std::mem::take(&mut state.pending.swallow);
     if !state.inspecting && !swallow {
         return;
     }
@@ -457,8 +473,8 @@ fn refresh_mode(
     mut pencil: Query<&mut BackgroundColor, With<PencilButton>>,
     mut pencil_label: Query<&mut TextColor, With<PencilLabel>>,
 ) {
-    if state.toggle_requested {
-        state.toggle_requested = false;
+    if state.pending.toggle {
+        state.pending.toggle = false;
         state.visible = !state.visible;
         if !state.visible {
             state.inspecting = false;
@@ -579,10 +595,7 @@ fn in_subtree(entity: Entity, root: Entity, parents: &Query<&ChildOf>) -> bool {
         match current {
             Some(candidate) if candidate == root => return true,
             Some(candidate) => {
-                current = parents
-                    .get(candidate)
-                    .ok()
-                    .map(|parent| parent.parent());
+                current = parents.get(candidate).ok().map(ChildOf::parent);
             }
             None => return false,
         }
@@ -690,10 +703,9 @@ fn sync_editor(
         let Some(target) = state.target.clone() else {
             return;
         };
-        let window = windows
-            .single()
-            .map(|window| Vec2::new(window.width(), window.height()))
-            .unwrap_or(Vec2::new(1280.0, 720.0));
+        let window = windows.single().map_or(Vec2::new(1280.0, 720.0), |window| {
+            Vec2::new(window.width(), window.height())
+        });
         let (x, y) = editor_placement(target.rect, window);
         let font = config.font.clone();
         let mut input_entity = Entity::PLACEHOLDER;
@@ -724,7 +736,7 @@ fn sync_editor(
             .with_children(|parent| {
                 parent.spawn((
                     Node::default(),
-                    label(&font, &target.detail(), FONT_PX, MUTED, true),
+                    label(font.as_ref(), &target.detail(), FONT_PX, MUTED, true),
                     OverlayNode,
                 ));
                 parent
@@ -754,7 +766,7 @@ fn sync_editor(
                                 TextLayout::no_wrap(),
                                 TextFont {
                                     font_size: FontSize::Px(FONT_PX),
-                                    font: font_source(&font),
+                                    font: font_source(font.as_ref()),
                                     ..default()
                                 },
                                 TextColor(Color::WHITE),
@@ -766,7 +778,7 @@ fn sync_editor(
                             .id();
                         row.spawn((
                             Node::default(),
-                            label(&font, "Enter save / Esc cancel", FONT_PX, MUTED, false),
+                            label(font.as_ref(), "Enter save / Esc cancel", FONT_PX, MUTED, false),
                             OverlayNode,
                         ));
                     });
@@ -831,10 +843,7 @@ fn update_pins(
     mut pins: Query<(Entity, &Pin, &mut Node)>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let scale = windows
-        .single()
-        .map(|window| window.scale_factor())
-        .unwrap_or(1.0);
+    let scale = windows.single().map_or(1.0, Window::scale_factor);
     if let Ok(root) = pins_root.single()
         && let Some((target, seq)) = state.pending_pin.take()
     {
@@ -857,7 +866,7 @@ fn update_pins(
             ))
             .with_child((
                 Node::default(),
-                label(&config.font, &seq.to_string(), FONT_PX, Color::BLACK, false),
+                label(config.font.as_ref(), &seq.to_string(), FONT_PX, Color::BLACK, false),
                 OverlayNode,
             ));
     }

@@ -13,8 +13,9 @@ into a bug report, an issue or an agent prompt.
 - In inspect mode the topmost UI node under the cursor is highlighted and a tooltip shows its  
   identity.
 - Clicking a node opens a one-line editor. `Enter` saves, `Esc` cancels.  
-- Each saved note writes one `UI_DEBUG_NOTE {...}` JSON line to stderr, and to a JSONL file  
-  when a log directory is configured.
+- Each saved note is a `UI_DEBUG_NOTE {...}` JSON line. Lines are kept in memory and printed  
+  to stderr as one block between `---` separators when the game ends, and appended to a JSONL  
+  file as they are saved when a log directory is configured.
 - A numbered pin stays next to every annotated node.  
 - While inspecting, clicks and keys are kept away from the host game.
 

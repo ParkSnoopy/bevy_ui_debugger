@@ -92,26 +92,64 @@ pub struct NoteHistory {
     pub notes: Vec<Note>,
 }
 
-/// Writes note lines to stderr and, when configured, to a JSONL file.
+/// Opening separator of the block printed at exit.
+const BLOCK_START: &str = "--- UI_DEBUG_NOTES ---";
+
+/// Closing separator of the block printed at exit.
+const BLOCK_END: &str = "--- END UI_DEBUG_NOTES ---";
+
+/// Appends note lines to a JSONL file when configured and keeps them in memory. The buffered
+/// lines are printed to stderr as one block when the game ends, so they are not lost in the
+/// engine's own log output.
 #[derive(Resource)]
 pub(crate) struct NoteSink {
     file: Option<File>,
+    pending: Vec<String>,
 }
 
 impl NoteSink {
-    /// Opens `<dir>/ui-debug-notes.jsonl` for appending, or stderr-only when `dir` is `None`.
+    /// Opens `<dir>/ui-debug-notes.jsonl` for appending, or memory-only when `dir` is `None`.
     pub(crate) fn open(dir: Option<PathBuf>) -> Self {
         let file = dir.and_then(|dir| open_log(&dir));
-        Self { file }
+        Self {
+            file,
+            pending: Vec::new(),
+        }
     }
 
     pub(crate) fn write(&mut self, line: &str) {
-        eprintln!("{line}");
         if let Some(file) = &mut self.file {
             let _ = writeln!(file, "{line}");
             let _ = file.flush();
         }
+        self.pending.push(line.to_owned());
     }
+
+    /// Prints everything buffered so far as one block and empties the buffer.
+    pub(crate) fn print_all(&mut self) {
+        if let Some(block) = format_block(&self.pending) {
+            let _ = writeln!(std::io::stderr().lock(), "{block}");
+        }
+        self.pending.clear();
+    }
+}
+
+impl Drop for NoteSink {
+    fn drop(&mut self) {
+        self.print_all();
+    }
+}
+
+/// The exit block: a blank line, the opening separator, one line per note, the closing
+/// separator and a blank line. `None` when there is nothing to print.
+fn format_block(lines: &[String]) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "\n{BLOCK_START}\n{}\n{BLOCK_END}\n",
+        lines.join("\n")
+    ))
 }
 
 fn open_log(dir: &Path) -> Option<File> {
@@ -142,4 +180,31 @@ pub(crate) fn json_str(text: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_is_framed_and_ordered() {
+        let lines = vec!["UI_DEBUG_NOTE {a}".to_owned(), "UI_DEBUG_NOTE {b}".to_owned()];
+        assert_eq!(
+            format_block(&lines).as_deref(),
+            Some("\n--- UI_DEBUG_NOTES ---\nUI_DEBUG_NOTE {a}\nUI_DEBUG_NOTE {b}\n--- END UI_DEBUG_NOTES ---\n")
+        );
+    }
+
+    #[test]
+    fn empty_buffer_prints_nothing() {
+        assert_eq!(format_block(&[]), None);
+    }
+
+    #[test]
+    fn print_all_drains_the_buffer() {
+        let mut sink = NoteSink::open(None);
+        sink.write("UI_DEBUG_NOTE {a}");
+        sink.print_all();
+        assert_eq!(sink.pending.len(), 0);
+    }
 }

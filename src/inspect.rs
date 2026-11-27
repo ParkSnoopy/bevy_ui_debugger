@@ -1,5 +1,7 @@
 //! Hit testing over the UI stack and identity extraction for a single node.
 
+use std::fmt::Write as _;
+
 use bevy::{
     camera::visibility::InheritedVisibility,
     ecs::{
@@ -67,22 +69,23 @@ impl UiTarget {
     pub fn summary(&self) -> String {
         let mut out = format!("#{}", self.id);
         if let Some(name) = &self.name {
-            out.push_str(&format!(" {name:?}"));
+            let _ = write!(out, " {name:?}");
         }
         if let Some(marker) = self.markers.first() {
             out.push(' ');
             out.push_str(short_path(marker));
         }
         if let Some(text) = &self.text {
-            out.push_str(&format!(" {text:?}"));
+            let _ = write!(out, " {text:?}");
         }
-        out.push_str(&format!(
+        let _ = write!(
+            out,
             " {:.0}x{:.0} @ ({:.0},{:.0})",
             self.rect.width(),
             self.rect.height(),
             self.rect.min.x,
             self.rect.min.y
-        ));
+        );
         out
     }
 
@@ -186,11 +189,10 @@ fn markers_of(
         let Some(info) = components.get_info(*id) else {
             continue;
         };
-        let path = info
-            .type_id()
-            .and_then(|type_id| registry.get(type_id))
-            .map(|registration| registration.type_info().type_path().to_string())
-            .unwrap_or_else(|| info.name().to_string());
+        let path = info.type_id().and_then(|type_id| registry.get(type_id)).map_or_else(
+            || info.name().to_string(),
+            |registration| registration.type_info().type_path().to_string(),
+        );
         // Without bevy's `debug` feature unreflected names are an angle-bracket placeholder.
         if path.starts_with('<') || is_engine_path(&path) {
             continue;
@@ -266,10 +268,10 @@ fn node_label(
     if let Some(name) = entity.get::<Name>() {
         return name.as_str().to_string();
     }
-    markers_of(entity, components, registry)
-        .first()
-        .map(|marker| short_path(marker).to_string())
-        .unwrap_or_else(|| format!("Node#{}", entity.id().index_u32()))
+    markers_of(entity, components, registry).first().map_or_else(
+        || format!("Node#{}", entity.id().index_u32()),
+        |marker| short_path(marker).to_string(),
+    )
 }
 
 fn truncate(text: &str, max: usize) -> String {
@@ -333,6 +335,5 @@ pub(crate) fn primary_window_scale(world: &mut World) -> f32 {
     world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .single(world)
-        .map(|window| window.scale_factor())
-        .unwrap_or(1.0)
+        .map_or(1.0, Window::scale_factor)
 }
