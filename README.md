@@ -45,6 +45,8 @@ Try it without writing any code:
 cargo run --example annotate
 # scripted session that saves screenshots and a log file
 cargo run --example annotate -- --script ./shots
+# same session typed through a simulated Korean/Japanese input method; --font needs CJK glyphs
+cargo run --example annotate -- --script ./shots --cjk --font ./NanumGothic.ttf
 ```
 
 ## Bevy support

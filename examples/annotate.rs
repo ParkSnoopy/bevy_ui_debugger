@@ -14,7 +14,7 @@ use bevy::{
     prelude::*,
     render::view::screenshot::{Screenshot, save_to_disk},
     ui_widgets::Button,
-    window::{CursorMoved, PrimaryWindow, WindowEvent},
+    window::{CursorMoved, Ime, PrimaryWindow, WindowEvent},
 };
 use bevy_ui_debugger::{NoteHistory, UiDebuggerPlugin};
 
@@ -26,7 +26,12 @@ struct Script {
     frame: u32,
     typed: usize,
     dir: PathBuf,
+    /// Type the notes through the input method, the way Korean, Japanese and Chinese are entered.
+    cjk: bool,
+    /// The character currently shown as an uncommitted composition.
+    composing: Option<char>,
 }
+
 
 /// Centre of the toggle button in the bottom-right corner of the 1280x720 window.
 const PENCIL: Vec2 = Vec2::new(1242.0, 688.0);
@@ -35,6 +40,8 @@ const BTN_SETTINGS: Vec2 = Vec2::new(130.0, 206.0);
 const HUD_TEXT: Vec2 = Vec2::new(790.0, 356.0);
 const NOTE_A: &str = "Load button: too small, move it up";
 const NOTE_B: &str = "Make this bigger";
+const NOTE_A_CJK: &str = "불러오기 버튼, 작아요 設定";
+const NOTE_B_CJK: &str = "더 크게 放大";
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -47,11 +54,27 @@ fn main() -> std::io::Result<()> {
         resolution: (1280, 720).into(),
         ..default()
     };
+    let cjk = args.iter().any(|arg| arg == "--cjk");
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(window),
         ..default()
     }));
+    // Bevy's built-in font has no CJK glyphs; `--font PATH` swaps in one that does.
+    if let Some(path) = args
+        .iter()
+        .position(|arg| arg == "--font")
+        .and_then(|index| args.get(index + 1))
+    {
+        let bytes = std::fs::read(path)?;
+        let replaced = app
+            .world_mut()
+            .resource_mut::<Assets<Font>>()
+            .insert(AssetId::default(), Font::from_bytes(bytes));
+        if let Err(error) = replaced {
+            warn!("could not replace the default font: {error}");
+        }
+    }
     // A real game gates this on its own command-line flag or setting.
     app.add_plugins(UiDebuggerPlugin {
         log_dir: script.clone(),
@@ -64,14 +87,22 @@ fn main() -> std::io::Result<()> {
             frame: 0,
             typed: 0,
             dir,
+            cjk,
+            composing: None,
         });
         app.add_systems(Update, run_script);
     }
-    app.add_systems(Startup, spawn_ui).run();
+    app.add_systems(Startup, move |commands: Commands| spawn_ui(commands, cjk))
+        .run();
     Ok(())
 }
 
-fn spawn_ui(mut commands: Commands) {
+fn spawn_ui(mut commands: Commands, cjk: bool) {
+    let (load, settings, hud) = if cjk {
+        ("불러오기", "設定", "깊이 3 / 용기 12 · 深度三")
+    } else {
+        ("Load", "Settings", "depth 3 / courage 12")
+    };
     commands.spawn(Camera2d);
     commands
         .spawn(Node {
@@ -128,8 +159,8 @@ fn spawn_ui(mut commands: Commands) {
                 .with_children(|panel| {
                     for (name, caption) in [
                         ("btn_new_run", "New run"),
-                        ("btn_load", "Load"),
-                        ("", "Settings"),
+                        ("btn_load", load),
+                        ("", settings),
                     ] {
                         let mut button = panel.spawn((
                             Node {
@@ -165,7 +196,7 @@ fn spawn_ui(mut commands: Commands) {
                     BackgroundColor(Color::srgb(0.16, 0.18, 0.22)),
                 ))
                 .with_child((
-                    Text::new("depth 3 / courage 12"),
+                    Text::new(hud),
                     TextFont {
                         font_size: FontSize::Px(28.0),
                         ..default()
@@ -202,17 +233,19 @@ fn run_script(world: &mut World) {
         script.frame += 1;
         script.frame
     };
+    let cjk = world.resource::<Script>().cjk;
     match frame {
         10 => move_cursor(world, PENCIL),
         14 | 34 | 104 => click(world),
         20 => move_cursor(world, BTN_LOAD),
         30 => shot(world, "01_hover"),
         40 => shot(world, "02_editor"),
-        44..=78 => type_text(world, NOTE_A),
+        43 | 111 => world.resource_mut::<Script>().typed = 0,
+        44..=78 => type_text(world, if cjk { NOTE_A_CJK } else { NOTE_A }),
         82 => shot(world, "03_typed"),
-        86 | 134 => press(world, KeyCode::Enter, &Key::Enter),
+        86 | 134 => submit(world),
         96 => move_cursor(world, HUD_TEXT),
-        112..=127 => type_text(world, NOTE_B),
+        112..=127 => type_text(world, if cjk { NOTE_B_CJK } else { NOTE_B }),
         140 => move_cursor(world, BTN_SETTINGS),
         150 => shot(world, "04_pins"),
         156 => finish(world),
@@ -293,10 +326,13 @@ fn press(world: &mut World, key_code: KeyCode, logical_key: &Key) {
 
 fn type_text(world: &mut World, text: &str) {
     let Some(ch) = text.chars().nth(world.resource::<Script>().typed) else {
-        world.resource_mut::<Script>().typed = 0;
         return;
     };
     world.resource_mut::<Script>().typed += 1;
+    if world.resource::<Script>().cjk {
+        type_with_ime(world, ch);
+        return;
+    }
     let typed = ch.to_string();
     tap(
         world,
@@ -304,6 +340,62 @@ fn type_text(world: &mut World, text: &str) {
         &Key::Character(typed.as_str().into()),
         Some(&typed),
     );
+}
+
+/// Types like a Korean, Japanese or Chinese input method.
+///
+/// A letter stays an uncommitted composition. The next letter, a space, punctuation or Enter
+/// commits it, and the input method passes the key through in the same frame as the commit.
+fn type_with_ime(world: &mut World, ch: char) {
+    let Some(window) = primary_window(world) else {
+        return;
+    };
+    commit_composition(world, window);
+    if ch.is_alphabetic() && !ch.is_ascii() {
+        let value = ch.to_string();
+        let end = value.len();
+        world.write_message(Ime::Preedit {
+            window,
+            value,
+            cursor: Some((end, end)),
+        });
+        world.write_message(WindowEvent::Ime(Ime::Preedit {
+            window,
+            value: ch.to_string(),
+            cursor: Some((ch.len_utf8(), ch.len_utf8())),
+        }));
+        world.resource_mut::<Script>().composing = Some(ch);
+    } else {
+        let typed = ch.to_string();
+        tap(
+            world,
+            KeyCode::Unidentified(NativeKeyCode::Unidentified),
+            &Key::Character(typed.as_str().into()),
+            Some(&typed),
+        );
+    }
+}
+
+fn commit_composition(world: &mut World, window: Entity) {
+    let Some(ch) = world.resource_mut::<Script>().composing.take() else {
+        return;
+    };
+    world.write_message(Ime::Commit {
+        window,
+        value: ch.to_string(),
+    });
+    world.write_message(WindowEvent::Ime(Ime::Commit {
+        window,
+        value: ch.to_string(),
+    }));
+}
+
+/// Presses Enter, first committing a pending composition the way an input method does.
+fn submit(world: &mut World) {
+    if let Some(window) = primary_window(world) {
+        commit_composition(world, window);
+    }
+    press(world, KeyCode::Enter, &Key::Enter);
 }
 
 fn shot(world: &mut World, name: &str) {
@@ -314,12 +406,23 @@ fn shot(world: &mut World, name: &str) {
 }
 
 fn finish(world: &mut World) {
-    let count = world.resource::<NoteHistory>().notes.len();
-    if count == 2 {
-        info!("script ok: {count} notes");
+    let cjk = world.resource::<Script>().cjk;
+    let expected = if cjk {
+        [NOTE_A_CJK, NOTE_B_CJK]
+    } else {
+        [NOTE_A, NOTE_B]
+    };
+    let texts: Vec<String> = world
+        .resource::<NoteHistory>()
+        .notes
+        .iter()
+        .map(|note| note.text.clone())
+        .collect();
+    if texts == expected {
+        info!("script ok: {} notes", texts.len());
         world.write_message(AppExit::Success);
     } else {
-        error!("script failed: expected 2 notes, got {count}");
+        error!("script failed: expected {expected:?}, got {texts:?}");
         world.write_message(AppExit::error());
     }
 }

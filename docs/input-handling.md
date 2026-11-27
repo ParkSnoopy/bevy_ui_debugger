@@ -44,3 +44,10 @@ The `UI` button always blocks picking beneath itself.
 
 The editor takes `InputFocus` when it opens and releases it when it closes.  
 Text typed into the editor therefore goes to the editor and not to other focused widgets.
+
+## Input methods
+
+Korean, Japanese and Chinese input methods keep the last syllable as an uncommitted composition.  
+Typing a space, punctuation or Enter makes the input method commit it and pass that key through in the same frame.  
+Bevy applies the commit in `PostUpdate`, after its own key handling has already dropped the key because the editor still reports a composition.  
+The overlay keeps such keys and replays them once the commit is applied, so one key press is enough.

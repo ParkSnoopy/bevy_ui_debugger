@@ -26,6 +26,7 @@ use bevy::{
     prelude::*,
     text::{
         EditableText,
+        EditableTextSystems,
         Font,
         FontSize,
         FontSource,
@@ -39,7 +40,7 @@ use bevy::{
     time::Time,
     ui::{ComputedNode, UiGlobalTransform, UiStack, widget::Text},
     ui_widgets::{TextInput, TextInputPlugin, UiWidgetsPlugins},
-    window::{PrimaryWindow, Window},
+    window::{Ime, PrimaryWindow, Window},
 };
 
 use crate::{
@@ -127,6 +128,9 @@ struct OverlayState {
     editor_action: Option<EditorAction>,
     seq: u32,
     pending_pin: Option<(Entity, u32)>,
+    /// Keys the input method passed through right after committing a syllable. Bevy drops them
+    /// because the editor still reports a composition, so they are replayed once it is applied.
+    deferred_keys: Vec<(Entity, KeyboardInput)>,
 }
 
 /// Adds the annotation overlay to the app.
@@ -188,6 +192,13 @@ impl Plugin for UiDebuggerPlugin {
                     .after(capture_click)
                     .before(InputFocusSystems::Dispatch),
             )
+            .add_systems(
+                PreUpdate,
+                stash_keys_after_commit
+                    .after(keyboard_input_system)
+                    .before(InputFocusSystems::Dispatch),
+            )
+            .add_systems(PostUpdate, replay_stashed_keys.after(EditableTextSystems))
             .add_systems(
                 Update,
                 (
@@ -835,6 +846,56 @@ fn editor_placement(rect: Rect, window: Vec2) -> (f32, f32) {
         .x
         .clamp(8.0, (window.x - EDITOR_WIDTH - 8.0).max(8.0));
     (x, y)
+}
+
+/// Catches keys that arrive in the same frame as an IME commit.
+///
+/// Typing a space, punctuation or Enter after a Hangul syllable makes the input method commit the
+/// syllable and pass the key through. Both reach the app in one frame, but Bevy applies the commit
+/// only in `PostUpdate`. Its key handling runs earlier, still sees the composition, and drops the
+/// key. The stash keeps those keys so they can be replayed after the commit.
+fn stash_keys_after_commit(
+    mut ime: MessageReader<Ime>,
+    mut keys: MessageReader<KeyboardInput>,
+    focus: Res<InputFocus>,
+    inputs: Query<&EditableText>,
+    mut state: ResMut<OverlayState>,
+) {
+    let committed = ime
+        .read()
+        .any(|event| matches!(event, Ime::Commit { .. } | Ime::Disabled { .. }));
+    let focused = focus
+        .get()
+        .filter(|entity| Some(*entity) == state.editor_input);
+    let composing = focused
+        .and_then(|entity| inputs.get(entity).ok())
+        .is_some_and(EditableText::is_composing);
+    let (true, true, Some(entity)) = (committed, composing, focused) else {
+        keys.clear();
+        return;
+    };
+    for input in keys.read() {
+        if input.state == ButtonState::Pressed {
+            state.deferred_keys.push((entity, input.clone()));
+        }
+    }
+}
+
+fn replay_stashed_keys(
+    mut commands: Commands,
+    mut state: ResMut<OverlayState>,
+    windows: Query<Entity, With<PrimaryWindow>>,
+) {
+    if state.deferred_keys.is_empty() {
+        return;
+    }
+    let Ok(window) = windows.single() else {
+        state.deferred_keys.clear();
+        return;
+    };
+    for (entity, input) in std::mem::take(&mut state.deferred_keys) {
+        commands.trigger(FocusedInput::new(entity, input, window));
+    }
 }
 
 fn on_editor_key(
