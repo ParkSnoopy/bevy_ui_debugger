@@ -1,21 +1,21 @@
 # bevy_ui_debugger
 
-An opt-in overlay for [Bevy](https://bevy.org) that lets you point at a UI node in a running  
-game, type a note about it, and get back one log line that identifies the node exactly.
+An opt-in overlay for [Bevy](https://bevy.org) that lets you point at a UI node in a running game,  
+type a note about it, and get back one log line that identifies the node exactly.
 
-It exists to close the gap between "this button looks wrong" and the entity, component and  
-style that produce it. Review feedback written against the running UI can be pasted straight  
-into a bug report, an issue or an agent prompt.
+It exists to close the gap between "this button looks wrong" and the entity, component and style that produce it.  
+Review feedback written against the running UI can be pasted straight into a bug report, an issue or an agent prompt.
 
 ## What it does
 
 - A small `UI` button toggles **inspect mode**.  
-- In inspect mode the topmost UI node under the cursor is highlighted and a tooltip shows its  
-  identity.
-- Clicking a node opens a one-line editor. `Enter` saves, `Esc` cancels.  
-- Each saved note is a `UI_DEBUG_NOTE {...}` JSON line. Lines are kept in memory and printed  
-  to stderr as one block between `---` separators when the game ends, and appended to a JSONL  
-  file as they are saved when a log directory is configured.
+- In inspect mode the topmost UI node under the cursor is highlighted,  
+  and a tooltip shows its identity.
+- Clicking a node opens a one-line editor.  
+  `Enter` saves, `Esc` cancels.  
+- Each saved note is a `UI_DEBUG_NOTE {...}` JSON line.  
+  Lines are kept in memory and printed to stderr as one block between `---` separators when the game ends,  
+  and appended to a JSONL file as they are saved when a log directory is configured.
 - A numbered pin stays next to every annotated node.  
 - While inspecting, clicks and keys are kept away from the host game.
 
@@ -38,8 +38,9 @@ fn main() {
 }
 ```
 
-The crate reads no command-line flags or environment variables. Gate the plugin on the  
-host's own switch and pass options as plugin fields. `F10` shows or hides the whole overlay.  
+The crate reads no command-line flags or environment variables.  
+Gate the plugin on the host's own switch and pass options as plugin fields.  
+`F10` shows or hides the whole overlay.  
 Set `verbose: true` for the full note detail (geometry, style, cursor, window).
 
 Try it without writing any code:
@@ -59,8 +60,8 @@ cargo run --example annotate -- --script ./shots
 ## Requirements
 
 - A primary window. Hit testing and note coordinates use the primary window only.  
-- Systems of the host game that read input must run `.after(InputSystems)`; see  
-  [docs/input-handling.md](docs/input-handling.md).
+- Systems of the host game that read input must run `.after(InputSystems)`;  
+  see [docs/input-handling.md](docs/input-handling.md).
 
 ## Documentation
 
